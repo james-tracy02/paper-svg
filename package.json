@@ -20,8 +20,10 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit",
-    "dev": "vite build --watch"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p demo",
+    "dev": "vite build --watch",
+    "demo": "vite --config demo/vite.config.ts",
+    "demo:build": "vite build --config demo/vite.config.ts"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -33,7 +35,9 @@
   },
   "devDependencies": {
     "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.3.0",
     "react": "^19.1.1",
+    "react-dom": "^19.3.1",
     "typescript": "~5.8.3",
     "vite": "^7.1.6",
     "vite-plugin-dts": "^4.5.3"

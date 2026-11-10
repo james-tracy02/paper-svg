@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": { "paper-svg": ["../src/index.ts"] }
+  },
+  "include": ["."],
+  "exclude": ["vite.config.ts", "dist"]
+}

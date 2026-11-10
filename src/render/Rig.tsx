@@ -135,7 +135,7 @@ const Rig: React.FC<RigProps> = ({
         </GlowFilter>
       </BlurFilter>
       {showPivots ? (
-        <g transform={`scale(${scale}, ${scale})`}>
+        <g transform={`scale(${scale}, ${scale}) scale(${mirror ? -1 : 1}, 1)`}>
           <Pivots groups={nodes} show includeNonArticulated />
         </g>
       ) : null}

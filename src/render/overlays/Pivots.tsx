@@ -1,6 +1,6 @@
 import React from "react";
 import type { MatrixTransform } from "../../types/Transform";
-import { matrixToTransform, matrixTransformToSvg } from "../transform";
+import { matrixTransformToSvg } from "../transform";
 
 export type PivotGroup = {
   id: string;
@@ -12,40 +12,35 @@ export type PivotGroup = {
 export type PivotsProps = {
   groups: PivotGroup[];
   show: boolean;
-  nonScalingStroke?: boolean;
   includeNonArticulated?: boolean; // when true, show pivots for all groups
+  /** Marker diameter in screen pixels. */
+  size?: number;
 };
 
-const Pivots: React.FC<PivotsProps> = ({ groups, show, nonScalingStroke = true, includeNonArticulated = false }) => {
+/**
+ * Draws each joint as a round-capped dot of non-scaling stroke, so its size on screen ignores node,
+ * rig and viewBox scale. A filled circle would need its own transform to cancel each of those.
+ */
+const Pivots: React.FC<PivotsProps> = ({ groups, show, includeNonArticulated = false, size = 8 }) => {
   if (!show) return null;
   return (
-    <>
+    <g pointerEvents="none">
       {groups.map((g) => {
         if (!includeNonArticulated && !g.articulated) return null;
-        const transform = matrixTransformToSvg(g.matrix);
-        const derived = matrixToTransform(g.matrix);
-        const scale = derived.scale;
-        const invScaleX = scale.x !== 0 ? 1 / scale.x : 1;
-        const invScaleY = scale.y !== 0 ? 1 / scale.y : 1;
-        const fallbackColor = g.articulated ? "#ff000066" : "#00ff0066";
-        const color = g.debugColor ?? fallbackColor;
         return (
-          <g key={g.id + "_joint"} transform={transform}>
-            <g transform={`scale(${invScaleX}, ${invScaleY})`}>
-              <ellipse
-                key={g.id + "_joint"}
-                fill={color}
-                rx={0.5}
-                ry={0.5}
-                stroke={color}
-                strokeWidth={0}
-                vectorEffect={nonScalingStroke ? "non-scaling-stroke" : undefined}
-              />
-            </g>
-          </g>
+          <path
+            key={g.id + "_joint"}
+            transform={matrixTransformToSvg(g.matrix)}
+            d="M 0 0 h 0.0001"
+            fill="none"
+            stroke={g.debugColor ?? (g.articulated ? "#ff000066" : "#00ff0066")}
+            strokeWidth={size}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
         );
       })}
-    </>
+    </g>
   );
 };
 
