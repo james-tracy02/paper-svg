@@ -1,0 +1,259 @@
+import React from "react";
+import SvgSprite from "./Sprite";
+import SvgSpriteMask from "./SpriteMask";
+import type { RenderNode } from "./RenderTree";
+import { getSpriteTransform, matrixTransformToSvg } from "./transform";
+import SvgSpritePattern from "./Pattern";
+import type { Sprite } from "../types/Sprite";
+import { getFillWrapTargets, wrapFill } from "./fillWrappers";
+
+/** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
+const renderClipShape = (sprite: Sprite, spriteTransform: string): React.ReactNode => {
+  const shape = sprite.shape ?? "ellipse";
+  if (sprite.customSprite) {
+    const allowed = sprite.clipPathIndices?.length ? new Set(sprite.clipPathIndices) : null;
+    return sprite.customSprite.elements.map((el, i) => {
+      if (allowed && !allowed.has(i)) return null;
+      if (!el.d) return null;
+      // Combine the sprite transform with the element's own transform
+      const combinedTransform = el.transform ? `${spriteTransform} ${el.transform}` : spriteTransform;
+      return <path key={i} d={el.d} transform={combinedTransform} />;
+    });
+  }
+  if (sprite.dynamicPath) {
+    return <path d={sprite.dynamicPath} transform={spriteTransform} />;
+  }
+  if (shape === "rect") return <rect x={-5} y={-5} width={10} height={10} transform={spriteTransform} />;
+  if (shape === "half_circle")
+    return (
+      <path
+        d="M -5 0 A 5 5 0 0 0 5 0 L -5 0 Z"
+        transform={spriteTransform}
+      />
+    );
+  if (shape === "line")
+    return <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1} stroke="black" transform={spriteTransform} />;
+  return <ellipse rx={5} ry={5} transform={spriteTransform} />;
+};
+
+export type SvgGroupProps = {
+  g: RenderNode;
+  onRotate: (g: RenderNode) => (e: React.MouseEvent) => void;
+  onSelectAttachment?: (event: React.PointerEvent) => void;
+  setPartRef: (id: string, el: SVGGElement | null) => void;
+  scopeId: (suffix: string) => string;
+  opacity?: number;
+  clickable?: boolean;
+  layer?: "fill" | "maskOutline" | "both";
+  spriteFillOverride?: string;
+  spriteStrokeOverride?: string;
+  /** When true, skip applying trueClippedBy clip-path wrappers (caller already handles clipping). */
+  skipTrueClip?: boolean;
+  /** When true, the fill gets no mask or clip-path wrappers; the caller wraps a run of fills sharing them. */
+  skipFillWrappers?: boolean;
+};
+
+const jointChain = (node: RenderNode) => {
+  const ids: string[] = [];
+  for (let joint: RenderNode | undefined = node; joint; joint = joint.jointParent) ids.push(joint.id);
+  return ids.join(" ");
+};
+
+const SvgGroup: React.FC<SvgGroupProps> = ({
+  g,
+  onRotate,
+  onSelectAttachment,
+  setPartRef,
+  scopeId,
+  opacity,
+  clickable,
+  layer = "both",
+  spriteFillOverride,
+  spriteStrokeOverride,
+  skipTrueClip,
+  skipFillWrappers,
+}) => {
+  if (g.noSprite) return null;
+
+  const transform = matrixTransformToSvg(g.matrix);
+  const articulated = Boolean(g.pointerEventsTarget) || g.parent?.articulated || g.articulated;
+  const rotateTarget = g.pointerEventsTarget ? { ...(g.parent ?? g), id: g.pointerEventsTarget } : (g.parent ?? g);
+  const rotates = articulated && !onSelectAttachment;
+  // Joints a press here rotates, directly or by being carried along (e.g. "hair_back head neck"), so other
+  // features can ask whether a part moves with a given joint.
+  const rotateChain = rotates ? jointChain(rotateTarget) : undefined;
+  const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
+  const clipId = g.clip ? scopeId(`${g.id}_clip`) : undefined;
+  const patternId = g.pattern ? scopeId(`${g.id}_pattern`) : undefined;
+  const patternFillIds: Record<string, string> | undefined = g.patternFills
+    ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
+    : undefined;
+  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipTrueClip);
+  const clipMaskTargets = fillWrapTargets.maskTargets;
+  const outlineClipSources = g.outlineClippedBy ?? g.clippedBy ?? [];
+  const clipOutlineMaskTargets = outlineClipSources.map((clipId) => scopeId(`${clipId}_group_outline`));
+  const trueClipOutlineSources = g.outlineTrueClippedBy ?? g.outlineClippedBy ?? g.trueClippedBy ?? [];
+  const trueClipOutlineMaskTargets = g.maskOutline
+    ? trueClipOutlineSources.map((name) => scopeId(`${name}_trueclip_outline`))
+    : [];
+  const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
+  const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
+  const hasClipMasks = clipMaskTargets.length > 0;
+
+  const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
+    if (!maskIds.length) {
+      return content;
+    }
+    return maskIds.reduceRight(
+      (acc, maskTarget, index) => (
+        <g
+          key={`${g.id}_${variant}_clip_${index}`}
+          mask={`url(#${maskTarget})`}
+          style={index === 0 && variant !== "outline" ? outerStyle : undefined}
+        >
+          {acc}
+        </g>
+      ),
+      content,
+    );
+  };
+
+  // Identity group is outermost; clip/mask wrappers go inside around the sprite content.
+  const spriteContent = (
+    <>
+      {maskId ? <SvgSpriteMask id={maskId} sprite={g.mask!} /> : null}
+      {clipId && g.clip ? (
+        <defs>
+          <clipPath id={clipId}>{renderClipShape(g.clip, getSpriteTransform(g.clip))}</clipPath>
+        </defs>
+      ) : null}
+      {patternId && g.pattern ? <SvgSpritePattern id={patternId} sprite={g.pattern} target={g} /> : null}
+      {patternFillIds && g.patternFills
+        ? Object.entries(g.patternFills).map(([idx, patternSprite]) => (
+            <SvgSpritePattern key={idx} id={patternFillIds[idx]} sprite={patternSprite} target={g} />
+          ))
+        : null}
+      {clickable ? (
+        <g
+          key={`${g.id}_hit`}
+          transform={transform}
+          ref={(el) => setPartRef(g.id, el)}
+          onPointerDown={onSelectAttachment}
+          data-render-hit={g.id}
+          style={{ pointerEvents: "visiblePainted", cursor: "pointer", opacity: 0 }}
+        >
+          <SvgSprite
+            id={`${g.id}_hit`}
+            articulated={false}
+            sprite={g.sprite}
+            mode={"default"}
+            pattern={patternId}
+            patternFills={patternFillIds}
+            cursorOverride="pointer"
+            fillOverride={spriteFillOverride}
+            strokeOverride={spriteStrokeOverride}
+          />
+        </g>
+      ) : null}
+      <g
+        key={g.id}
+        transform={transform}
+        // Opacity multiplies like the fill's masks and clip-paths, so it can sit here instead of on an outer <g>.
+        opacity={outerStyle ? undefined : opacity}
+        mask={maskId ? `url(#${maskId})` : undefined}
+        clipPath={clipId ? `url(#${clipId})` : undefined}
+        data-render-id={g.id}
+        ref={(el) => setPartRef(g.id, el)}
+        data-rotate-chain={rotateChain}
+        onMouseDown={rotates ? onRotate(rotateTarget) : undefined}
+        onPointerDown={onSelectAttachment}
+        style={
+          g.pointerEvents === false
+            ? { pointerEvents: "none" as const }
+            : hasClipMasks && g.pointerEvents !== true
+              ? { ...(clickableStyle ?? {}) }
+              : { pointerEvents: "visiblePainted", ...(clickableStyle ?? {}) }
+        }
+      >
+        <SvgSprite
+          id={g.id}
+          articulated={articulated}
+          sprite={g.sprite}
+          mode={"default"}
+          pattern={patternId}
+          patternFills={patternFillIds}
+          cursorOverride={clickable ? "pointer" : undefined}
+          fillOverride={spriteFillOverride}
+          strokeOverride={spriteStrokeOverride}
+        />
+      </g>
+    </>
+  );
+
+  // Wrap sprite content with clip-path and mask wrappers, then place inside the identity group.
+  const wrappedContent = skipFillWrappers ? spriteContent : wrapFill(spriteContent, fillWrapTargets, g.id, outerStyle);
+
+  // The node's own <g> carries pointer events, cursor and opacity; only a blend mode needs a <g> around the fill's
+  // wrappers, so it blends with the backdrop rather than inside them.
+  const filledGroup = outerStyle ? (
+    <g key={g.id} opacity={opacity} style={outerStyle}>
+      {wrappedContent}
+    </g>
+  ) : (
+    wrappedContent
+  );
+
+  let outlineGroup: React.ReactNode = null;
+  if (g.maskOutline && (clipOutlineMaskTargets.length > 0 || trueClipOutlineMaskTargets.length > 0)) {
+    const outlineMaskTargets = [...clipOutlineMaskTargets, ...trueClipOutlineMaskTargets];
+    // The node's sprite mask is defined once, by the fill.
+    const outlineNode = (
+      <g
+        key={`${g.id}_outline`}
+        transform={transform}
+        mask={maskId ? `url(#${maskId}_outline)` : undefined}
+        data-render-id={`${g.id}_outline`}
+        ref={(el) => setPartRef(g.id, el)}
+        style={{ pointerEvents: "none" }}
+      >
+        <SvgSprite id={g.id} articulated={articulated} sprite={g.sprite} mode={"outline"} />
+      </g>
+    );
+    const baseOutlineGroup = outerStyle ? (
+      <g key={`${g.id}_outline`} style={outerStyle}>
+        {outlineNode}
+      </g>
+    ) : (
+      outlineNode
+    );
+    outlineGroup = wrapWithMasks(baseOutlineGroup, outlineMaskTargets, "outline");
+  }
+
+  if (layer === "fill") {
+    return <>{filledGroup}</>;
+  }
+  if (layer === "maskOutline") {
+    return <>{outlineGroup}</>;
+  }
+  return (
+    <>
+      {filledGroup}
+      {outlineGroup}
+    </>
+  );
+};
+
+const areEqual = (a: SvgGroupProps, b: SvgGroupProps) =>
+  a.g === b.g &&
+  a.onRotate === b.onRotate &&
+  a.onSelectAttachment === b.onSelectAttachment &&
+  a.setPartRef === b.setPartRef &&
+  a.opacity === b.opacity &&
+  a.clickable === b.clickable &&
+  a.scopeId === b.scopeId &&
+  a.spriteFillOverride === b.spriteFillOverride &&
+  a.spriteStrokeOverride === b.spriteStrokeOverride &&
+  a.skipTrueClip === b.skipTrueClip &&
+  a.skipFillWrappers === b.skipFillWrappers &&
+  a.layer === b.layer;
+export default React.memo(SvgGroup, areEqual);
