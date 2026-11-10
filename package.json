@@ -20,10 +20,12 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p demo",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p demo && tsc --noEmit -p test",
     "dev": "vite build --watch",
     "demo": "vite --config demo/vite.config.ts",
-    "demo:build": "vite build --config demo/vite.config.ts"
+    "demo:build": "vite build --config demo/vite.config.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -40,6 +42,24 @@
     "react-dom": "^19.3.1",
     "typescript": "~5.8.3",
     "vite": "^7.1.6",
-    "vite-plugin-dts": "^4.5.3"
-  }
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^5.1.0"
+  },
+  "author": "lokkit",
+  "homepage": "https://github.com/james-tracy02/paper-svg#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/james-tracy02/paper-svg.git"
+  },
+  "bugs": {
+    "url": "https://github.com/james-tracy02/paper-svg/issues"
+  },
+  "keywords": [
+    "svg",
+    "skeletal-animation",
+    "rigging",
+    "puppet",
+    "sprites",
+    "react"
+  ]
 }
