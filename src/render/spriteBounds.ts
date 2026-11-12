@@ -27,8 +27,21 @@ const box = (minX: number, minY: number, maxX: number, maxY: number): Bounds => 
   height: maxY - minY,
 });
 
+// Paths repeat across renders and poses (a driven path takes a few shapes), so their bounds are kept.
+const pathBoundsCache = new Map<string, Bounds | null>();
+const PATH_BOUNDS_CACHE_SIZE = 1000;
+
 /** Bounds of an SVG path's points and control points, after `transform` (an SVG transform list). */
 const pathBounds = (d: string, transform?: string): Bounds | null => {
+  const key = transform ? `${transform}|${d}` : d;
+  if (pathBoundsCache.has(key)) return pathBoundsCache.get(key)!;
+  const bounds = measurePathBounds(d, transform);
+  if (pathBoundsCache.size >= PATH_BOUNDS_CACHE_SIZE) pathBoundsCache.clear();
+  pathBoundsCache.set(key, bounds);
+  return bounds;
+};
+
+const measurePathBounds = (d: string, transform?: string): Bounds | null => {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;

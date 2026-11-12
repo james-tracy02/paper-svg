@@ -6,6 +6,7 @@ import type { RenderMode, SpriteStyle } from "../spriteTypes";
 import { getZoomStrokeWidth } from "../hooks/useSpriteVisuals";
 import { pathDefId } from "../hashKey";
 import { useHoistedDefs } from "../useHoistedDefs";
+import type { BindTransform } from "../Sprite";
 
 export type CustomSpriteShapeProps = {
   ownerId: string;
@@ -31,6 +32,8 @@ export type CustomSpriteShapeProps = {
   style: SpriteStyle;
   opacity?: number;
   applyLightingColor: (color?: string) => string | undefined;
+  /** See SvgSprite: binds the element carrying `transform` to the pose. */
+  bindTransform?: BindTransform;
 };
 
 const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
@@ -55,6 +58,7 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
   style,
   opacity,
   applyLightingColor,
+  bindTransform,
 }) => {
   const customSprite = sprite.customSprite!;
   const customRootTransform = getSpriteTransform(customSprite);
@@ -113,9 +117,10 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
     // ponytail: images get no outline and mask as their bounding rect (no per-pixel alpha)
     if (mode === "outline" || mode === "outer_outline") return null;
     return mask || mode.includes("mask") ? (
-      <rect transform={combinedTransform} width={width} height={height} fill={baseFill} />
+      <rect ref={bindTransform?.(combinedTransform)} transform={combinedTransform} width={width} height={height} fill={baseFill} />
     ) : (
       <image
+        ref={bindTransform?.(combinedTransform)}
         transform={combinedTransform}
         href={href}
         width={width}
@@ -161,13 +166,15 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
     { el, index, elSymbolId, common, elStroked }: (typeof leaves)[number],
     transform: string | undefined,
     style: SpriteStyle | undefined,
+    ref?: (element: Element | null) => void,
   ) =>
     elSymbolId ? (
       // The shared <path> carries vector-effect itself; it doesn't inherit through <use>.
-      <use key={`${ownerId}_sprite_${index}`} href={`#${elSymbolId}`} transform={transform} {...common} style={style} />
+      <use key={`${ownerId}_sprite_${index}`} ref={ref} href={`#${elSymbolId}`} transform={transform} {...common} style={style} />
     ) : (
       <path
         key={`${ownerId}_sprite_${index}`}
+        ref={ref}
         transform={transform}
         d={el.d}
         {...common}
@@ -186,13 +193,17 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
     return (
       <>
         {inlineGradientDefs}
-        {renderLeaf(leaf, transform || undefined, hasStyle(style) ? style : undefined)}
+        {renderLeaf(leaf, transform || undefined, hasStyle(style) ? style : undefined, bindTransform?.(transform || undefined))}
       </>
     );
   }
 
   return (
-    <g transform={combinedTransform || undefined} style={hasStyle(wrapperStyle) ? wrapperStyle : undefined}>
+    <g
+      ref={bindTransform?.(combinedTransform || undefined)}
+      transform={combinedTransform || undefined}
+      style={hasStyle(wrapperStyle) ? wrapperStyle : undefined}
+    >
       {inlineGradientDefs}
       {leaves.map((leaf) => renderLeaf(leaf, leaf.el.transform, leafStyle))}
     </g>

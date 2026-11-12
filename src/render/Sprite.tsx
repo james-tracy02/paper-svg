@@ -1,7 +1,7 @@
 import type { Sprite, SpriteGradient } from "../types/Sprite";
 import { buildGradientTransform, gradientDefId, renderGradientDefinition } from "./gradient";
 import { getSpriteTransform } from "./transform";
-import React from "react";
+import React, { useContext } from "react";
 import {
   EllipseSprite,
   FuzzySprite,
@@ -16,6 +16,9 @@ import { useSpriteVisuals } from "./hooks/useSpriteVisuals";
 import CustomSpriteShape from "./components/CustomSpriteShape";
 import ImageSprite from "./components/ImageSprite";
 import { useHoistedDefs } from "./useHoistedDefs";
+import { bindPose, joinRefs, PoseBindingsContext, prefixWriter, setAttr } from "./poseBindings";
+import { matrixTransformToSvg } from "./transform";
+import type { RenderNode } from "./RenderTree";
 
 type SvgSpriteProps = {
   id: string;
@@ -32,7 +35,17 @@ type SvgSpriteProps = {
   strokeWidthOverride?: number;
   /** Transform composed before the sprite's own, so the caller needs no wrapper <g> for it. */
   baseTransform?: string;
+  /**
+   * The node this sprite draws, so `Rig`'s `setPose` can move it without a render: its driven path,
+   * and `baseTransform` when given, which must then be the node's `matrixTransformToSvg(matrix)`.
+   */
+  poseNode?: string;
 };
+
+/** A ref callback for the element carrying the sprite's transform, given the transform it rendered. */
+export type BindTransform = (rendered: string | undefined) => ((element: Element | null) => void) | undefined;
+
+const nodeTransform = (node: RenderNode) => matrixTransformToSvg(node.matrix);
 
 const isMaskMode = (mode: RenderMode) => mode === "mask" || mode === "outline_mask" || mode === "mask_no_outline";
 
@@ -65,7 +78,13 @@ const SvgSpriteComponent: React.FC<SvgSpriteProps> = ({
   strokeOverride,
   strokeWidthOverride,
   baseTransform,
+  poseNode,
 }) => {
+  const bindings = useContext(PoseBindingsContext);
+  const bindTransform: BindTransform | undefined =
+    bindings && poseNode && baseTransform
+      ? (rendered) => bindPose(bindings, poseNode, prefixWriter(poseNode, "transform", baseTransform, rendered, nodeTransform))
+      : undefined;
   const mask = isMaskMode(mode);
   const transformStr = [baseTransform, getTransformForMode(sprite, mode)].filter(Boolean).join(" ");
   const lineJoin = sprite.lineJoin ?? "round";
@@ -128,14 +147,18 @@ const SvgSpriteComponent: React.FC<SvgSpriteProps> = ({
   const transform = transformStr || undefined;
 
   if (sprite.href) {
-    return withDefs(<ImageSprite transform={transform} href={sprite.href} />);
+    return withDefs(<ImageSprite transform={transform} href={sprite.href} bindTransform={bindTransform} />);
   }
 
   if (sprite.dynamicPath) {
     const litFill = applyLightingColor(resolvedFill);
     const litStroke = applyLightingColor(stroke) ?? stroke;
+    const bindPath = poseNode
+      ? bindPose<Element>(bindings, poseNode, (element) => (get) => setAttr(element, "d", get(poseNode)?.sprite.dynamicPath))
+      : undefined;
     return withDefs(
       <path
+        ref={joinRefs(bindTransform?.(transform), bindPath)}
         transform={transform}
         d={sprite.dynamicPath}
         fill={litFill}
@@ -170,20 +193,33 @@ const SvgSpriteComponent: React.FC<SvgSpriteProps> = ({
         style={spriteStyle}
         opacity={opacity}
         applyLightingColor={applyLightingColor}
+        bindTransform={bindTransform}
       />,
     );
   }
 
-  const shapeProps = { transform, fill: resolvedFill, stroke, strokeWidth: zoomStrokeWidth, style: spriteStyle, opacity };
+  const shapeProps = {
+    transform,
+    bindTransform,
+    fill: resolvedFill,
+    stroke,
+    strokeWidth: zoomStrokeWidth,
+    style: spriteStyle,
+    opacity,
+  };
   switch (normalizedShape) {
     case "rect":
       return withDefs(<RectSprite {...shapeProps} />);
     case "half_circle":
       return withDefs(<HalfCircleSprite {...shapeProps} />);
     case "fuzzy":
-      return withDefs(<FuzzySprite transform={transform} fill={resolvedFill} style={spriteStyle} opacity={opacity} />);
+      return withDefs(
+        <FuzzySprite transform={transform} bindTransform={bindTransform} fill={resolvedFill} style={spriteStyle} opacity={opacity} />,
+      );
     case "soft":
-      return withDefs(<SoftSprite transform={transform} fill={resolvedFill} style={spriteStyle} opacity={opacity} />);
+      return withDefs(
+        <SoftSprite transform={transform} bindTransform={bindTransform} fill={resolvedFill} style={spriteStyle} opacity={opacity} />,
+      );
     case "line":
       return withDefs(<LineSprite {...shapeProps} />);
     default:
@@ -249,6 +285,7 @@ const SvgSprite = React.memo(SvgSpriteComponent, (prev, next) => {
   if (prev.strokeWidthOverride !== next.strokeWidthOverride) return false;
   if (prev.fillOverride !== next.fillOverride) return false;
   if (prev.baseTransform !== next.baseTransform) return false;
+  if (prev.poseNode !== next.poseNode) return false;
   const a = prev.sprite;
   const b = next.sprite;
   if (a === b) return true; // same reference

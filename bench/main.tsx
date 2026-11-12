@@ -3,10 +3,10 @@
  * Profiling page: renders a fixture with Rig and exposes `window.bench`, which bench/profile.mjs
  * drives under a Chrome trace. Each action renders synchronously and resolves after the frame paints.
  */
-import { Profiler, useState, type CSSProperties } from "react";
+import { Profiler, createRef, useState, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { getRenderNodes, getZoomVars, Rig, type Node, type Pose } from "paper-svg";
+import { getRenderNodes, getZoomVars, Rig, type Node, type Pose, type RigHandle } from "paper-svg";
 import { buildMaskSignature } from "../src/render/RenderTree";
 import { createNodeInterner } from "../src/render/stableNodes";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
@@ -31,6 +31,7 @@ const rebuildWithRotation = (node: Node, id: string, degrees: number): Node => (
 type State = { body: Node; pose?: Pose; zoom: number; tick: number };
 let setState: (update: (state: State) => State) => void = () => {};
 const commits: number[] = [];
+const rigRef = createRef<RigHandle>();
 
 const App = () => {
   const [state, set] = useState<State>({ body: fixture.body, zoom: PIXELS_PER_UNIT, tick: 0 });
@@ -46,6 +47,7 @@ const App = () => {
     >
       <Profiler id="rig" onRender={(_id, _phase, actualDuration) => commits.push(actualDuration)}>
         <Rig
+          ref={rigRef}
           body={state.body}
           pose={state.pose}
           scale={fixture.scale}
@@ -89,6 +91,11 @@ const bench = {
       body: fixture.body,
       pose: { rotations: Object.fromEntries(joints.map((id) => [id, index + 1])) },
     })),
+  /** Turns `joints` by `index + 1` degrees each through `setPose`, as a drag would. */
+  setPose: (index: number, joints: string[]) => {
+    rigRef.current!.setPose({ rotations: Object.fromEntries(joints.map((id) => [id, index + 1])) });
+    return nextFrame();
+  },
   resetPose: () => update((state) => ({ ...state, body: fixture.body, pose: undefined })),
   rerender: () => update((state) => ({ ...state, tick: state.tick + 1 })),
   zoom: (zoom: number) => update((state) => ({ ...state, zoom })),

@@ -76,14 +76,14 @@ const sameMatrix = (a: MatrixTransform | undefined, b: MatrixTransform | undefin
     a.matrix.d === b.matrix.d);
 
 /** The fields of a render node a pose can change, besides its z-index (see `createRigLayout`). */
-type Placement = Pick<RenderNode, "matrix" | "parentMatrix" | "translateScale" | "patternSpace" | "hidden"> & {
+export type Placement = Pick<RenderNode, "matrix" | "parentMatrix" | "translateScale" | "patternSpace" | "hidden"> & {
   gradientTransform?: string;
   dynamicPath?: string;
   customSprite?: CustomSprite;
 };
 
 /** Where `solution` places `node`, and its shape, as a fresh walk of the posed tree would make them. */
-const placementOf = (node: RenderNode, index: number, rig: Rig, solution: PoseSolution): Placement => {
+export const placementOf = (node: RenderNode, index: number, rig: Rig, solution: PoseSolution): Placement => {
   // A pose sets these only where it computes one; otherwise the node's own sprite (as built) has them.
   const own = rig.entries[index].node.sprite;
   return {
@@ -99,7 +99,7 @@ const placementOf = (node: RenderNode, index: number, rig: Rig, solution: PoseSo
   };
 };
 
-const isPlacedAt = (node: RenderNode, at: Placement) =>
+export const isPlacedAt = (node: RenderNode, at: Placement) =>
   sameMatrix(node.matrix, at.matrix) &&
   sameMatrix(node.parentMatrix, at.parentMatrix) &&
   sameVector(node.translateScale, at.translateScale) &&
@@ -108,6 +108,20 @@ const isPlacedAt = (node: RenderNode, at: Placement) =>
   node.sprite.gradientTransform === at.gradientTransform &&
   node.sprite.dynamicPath === at.dynamicPath &&
   node.sprite.customSprite === at.customSprite;
+
+/** Whether two versions of one render node (say, in two poses) are placed and shaped alike. */
+export const samePlacement = (a: RenderNode, b: RenderNode) =>
+  a === b ||
+  isPlacedAt(a, {
+    matrix: b.matrix,
+    parentMatrix: b.parentMatrix,
+    translateScale: b.translateScale,
+    patternSpace: b.patternSpace,
+    hidden: b.hidden,
+    gradientTransform: b.sprite.gradientTransform,
+    dynamicPath: b.sprite.dynamicPath,
+    customSprite: b.sprite.customSprite,
+  });
 
 const place = (node: RenderNode, { gradientTransform, dynamicPath, customSprite, ...at }: Placement): RenderNode => ({
   ...node,

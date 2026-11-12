@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import SvgSprite from "./Sprite";
 import SvgSpriteMask from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
@@ -6,6 +6,7 @@ import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
 import type { Sprite } from "../types/Sprite";
 import { getFillWrapTargets, wrapFill } from "./fillWrappers";
+import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
 
 /** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
 const renderClipShape = (sprite: Sprite, spriteTransform: string): React.ReactNode => {
@@ -53,6 +54,13 @@ export type SvgGroupProps = {
   skipFillWrappers?: boolean;
 };
 
+/** Binds an element whose transform is node `id`'s matrix to the pose. */
+export const bindNodeTransform = (bindings: PoseBindings | null, id: string, precision?: number) =>
+  bindPose<Element>(bindings, id, (element) => (get) => {
+    const node = get(id);
+    if (node) setAttr(element, "transform", matrixTransformToSvg(node.matrix, precision));
+  });
+
 const jointChain = (node: RenderNode) => {
   const ids: string[] = [];
   for (let joint: RenderNode | undefined = node; joint; joint = joint.jointParent) ids.push(joint.id);
@@ -73,6 +81,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   skipClipPaths,
   skipFillWrappers,
 }) => {
+  const bindings = useContext(PoseBindingsContext);
   if (g.noSprite || g.hidden) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
@@ -137,13 +146,14 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         <g
           key={`${g.id}_hit`}
           transform={transform}
-          ref={(el) => setPartRef(g.id, el)}
+          ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
           onPointerDown={onSelectAttachment}
           data-render-hit={g.id}
           style={{ pointerEvents: "visiblePainted", cursor: "pointer", opacity: 0 }}
         >
           <SvgSprite
             id={`${g.id}_hit`}
+            poseNode={g.id}
             articulated={false}
             sprite={g.sprite}
             mode={"default"}
@@ -163,7 +173,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         mask={maskId ? `url(#${maskId})` : undefined}
         clipPath={clipId ? `url(#${clipId})` : undefined}
         data-render-id={g.id}
-        ref={(el) => setPartRef(g.id, el)}
+        ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
         data-rotate-chain={rotateChain}
         onMouseDown={rotates ? onRotate(rotateTarget) : undefined}
         onPointerDown={onSelectAttachment}
@@ -177,6 +187,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
       >
         <SvgSprite
           id={g.id}
+          poseNode={g.id}
           articulated={articulated}
           sprite={g.sprite}
           mode={"default"}
@@ -213,10 +224,10 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         transform={transform}
         mask={maskId ? `url(#${maskId}_outline)` : undefined}
         data-render-id={`${g.id}_outline`}
-        ref={(el) => setPartRef(g.id, el)}
+        ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
         style={{ pointerEvents: "none" }}
       >
-        <SvgSprite id={g.id} articulated={articulated} sprite={g.sprite} mode={"outline"} />
+        <SvgSprite id={g.id} poseNode={g.id} articulated={articulated} sprite={g.sprite} mode={"outline"} />
       </g>
     );
     const baseOutlineGroup = outerStyle ? (

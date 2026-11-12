@@ -1,7 +1,8 @@
 import type { Sprite } from "../types/Sprite";
 import type { RenderNode } from "./RenderTree";
 import SvgSprite from "./Sprite";
-import React from "react";
+import React, { useContext } from "react";
+import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
 import {
   combineMatrixTransforms,
   getInverseScale,
@@ -10,6 +11,8 @@ import {
   matrixTransformToSvg,
   spriteUserSpace,
 } from "./transform";
+
+const BASE_SIZE = 20;
 
 type PatternProps = {
   id: string;
@@ -28,13 +31,11 @@ const getPatternSpaceTransform = (target: RenderNode) => {
   return matrixTransformToSvg(combineMatrixTransforms(inverse, target.patternSpace), 6);
 };
 
-const SvgSpritePattern: React.FC<PatternProps> = ({ id, sprite, target }) => {
+/** The `patternTransform` that tiles `sprite` over `target` where `target` stands. */
+const getPatternTransform = (sprite: Sprite, target: RenderNode) => {
   const derived = matrixToTransform(target.matrix);
   const inverseScale = getInverseScale(derived);
   const inverseSpriteScale = getInverseScale(target.sprite);
-  const baseSize = 20;
-  const intrinsicWidth = sprite.customSprite?.size?.width ?? baseSize;
-  const intrinsicHeight = sprite.customSprite?.size?.height ?? baseSize;
   const scaleX = sprite.scale?.x ?? 1;
   const scaleY = sprite.scale?.y ?? 1;
   const offsetX = sprite.translate?.x ?? 0;
@@ -56,10 +57,22 @@ const SvgSpritePattern: React.FC<PatternProps> = ({ id, sprite, target }) => {
     // Offset is in tile units, so it scales and rotates with the pattern from the target's origin
     offsetX || offsetY ? `translate(${offsetX}, ${-offsetY})` : null,
   ].filter(Boolean);
-  const patternTransform = patternTransformParts.length ? patternTransformParts.join(" ") : undefined;
+  return patternTransformParts.length ? patternTransformParts.join(" ") : undefined;
+};
+
+const SvgSpritePattern: React.FC<PatternProps> = ({ id, sprite, target }) => {
+  const bindings = useContext(PoseBindingsContext);
+  const intrinsicWidth = sprite.customSprite?.size?.width ?? BASE_SIZE;
+  const intrinsicHeight = sprite.customSprite?.size?.height ?? BASE_SIZE;
+  const patternTransform = getPatternTransform(sprite, target);
+  const bindTransform = bindPose<Element>(bindings, target.id, (element) => (get) => {
+    const posed = get(target.id);
+    if (posed) setAttr(element, "patternTransform", getPatternTransform(sprite, posed));
+  });
 
   return (
     <pattern
+      ref={bindTransform}
       id={id}
       // Tile window centered on the origin so a tile's center lands on the target's origin
       x={-intrinsicWidth / 2}

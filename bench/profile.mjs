@@ -104,6 +104,14 @@ const scenarios = {
     run: (i) =>
       window.bench.posePose(i, ["arm_right", "forearm_right", "arm_left", "forearm_left", "torso", "head", "leg_right", "leg_left"]),
   },
+  "pose change (rotate a forearm, setPose)": {
+    prepare: () => window.bench.resetPose(),
+    run: (i) => window.bench.setPose(i, ["forearm_right"]),
+  },
+  "pose change (8 joints, setPose)": {
+    run: (i) =>
+      window.bench.setPose(i, ["arm_right", "forearm_right", "arm_left", "forearm_left", "torso", "head", "leg_right", "leg_left"]),
+  },
   "re-render, same body": { prepare: () => window.bench.resetPose(), run: () => window.bench.rerender() },
   "zoom (CSS only)": { run: (i) => window.bench.zoom(i % 2 ? 2.5 : 2) },
 };

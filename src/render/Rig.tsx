@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import type { Node } from "../types/Node";
 import type { Pose } from "../types/Pose";
 import type { Color, Vector2 } from "../types/primitives";
@@ -13,6 +13,7 @@ import TintFilter from "./filters/TintFilter";
 import BlurFilter from "./filters/BlurFilter";
 import { SPRITE_ROOT_STYLE } from "./hooks/useSpriteVisuals";
 import { ColorTransformProvider, type ColorTransform } from "./context/ColorTransformContext";
+import { createLivePoser } from "./livePose";
 
 export type GlowConfig = {
   color?: Color;
@@ -65,21 +66,39 @@ export type RigProps = {
   effects?: RigEffects;
 };
 
+/** What a `ref` on `Rig` gets. */
+export type RigHandle = {
+  /**
+   * Shows `pose` without a React render, for drags and animation: moved nodes are written straight
+   * to the DOM. A pose that changes what is drawn (draw order, visibility, a swapped sprite) renders
+   * once instead. The pose holds until the `pose` prop changes; commit the final pose through the
+   * prop when the gesture ends, or call `setPose` with the prop's pose to cancel.
+   */
+  setPose(pose: Pose): void;
+};
+
 /** Renders a node tree to SVG. Place it inside an `<svg>`. */
-const Rig: React.FC<RigProps> = ({
-  body,
-  pose,
-  scale = 1,
-  mirror = false,
-  idPrefix = "rig",
-  getRenderGroupOptions,
-  colorTransform,
-  onRotate,
-  showPivots = false,
-  effects,
-}) => {
+const Rig = forwardRef<RigHandle, RigProps>(function Rig(
+  {
+    body,
+    pose,
+    scale = 1,
+    mirror = false,
+    idPrefix = "rig",
+    getRenderGroupOptions,
+    colorTransform,
+    onRotate,
+    showPivots = false,
+    effects,
+  },
+  ref,
+) {
   const scopeId = useCallback((suffix: string) => `${idPrefix}_${suffix}`, [idPrefix]);
-  const nodes = useRenderNodes(body, pose);
+  const [livePose] = useState(createLivePoser);
+  // A pose `setPose` had to render, and the `pose` prop it overrides; a new prop pose replaces it.
+  const [rendered, setRendered] = useState<{ pose: Pose; over: Pose | undefined }>();
+  const shownPose = rendered && rendered.over === pose ? rendered.pose : pose;
+  const nodes = useRenderNodes(body, shownPose);
 
   const partRefs = useRef<Record<string, SVGGElement | null>>({});
   const setPartRef = useCallback((id: string, element: SVGGElement | null) => {
@@ -89,6 +108,19 @@ const Rig: React.FC<RigProps> = ({
   // Read through a ref so handleRotate stays stable across rebuilds and nodes keep their memo.
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
+
+  const propPose = useRef(pose);
+  propPose.current = pose;
+  useImperativeHandle(
+    ref,
+    () => ({
+      setPose(next) {
+        // Pivots are drawn from `nodes`, so they need a render to follow.
+        if (showPivots || !livePose.write(next)) setRendered({ pose: next, over: propPose.current });
+      },
+    }),
+    [livePose, showPivots],
+  );
 
   const handleRotate = useCallback(
     (part: RenderNode) => (event: React.MouseEvent) => {
@@ -101,11 +133,12 @@ const Rig: React.FC<RigProps> = ({
         clicked,
         partId: part.id,
         element: partRefs.current[part.id],
-        nodes: nodesRef.current,
+        // Where a written pose drew them, if one is showing.
+        nodes: livePose.nodes() ?? nodesRef.current,
       });
       if (pivot) onRotate(part.id, pivot)(event);
     },
-    [onRotate],
+    [onRotate, livePose],
   );
 
   const graphics = (
@@ -136,6 +169,7 @@ const Rig: React.FC<RigProps> = ({
                 setPartRef={setPartRef}
                 outerOutline={effects?.outerOutline}
                 isHidden={effects?.isHidden}
+                livePose={livePose}
               />
             </g>
           </TintFilter>
@@ -150,6 +184,6 @@ const Rig: React.FC<RigProps> = ({
   );
 
   return colorTransform ? <ColorTransformProvider value={colorTransform}>{graphics}</ColorTransformProvider> : graphics;
-};
+});
 
 export default Rig;

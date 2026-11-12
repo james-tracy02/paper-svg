@@ -3,9 +3,12 @@ import type { SpriteStyle } from "../spriteTypes";
 import { hashKey } from "../hashKey";
 import { useHoistedDefs } from "../useHoistedDefs";
 import { strokeAttributes, styleOrUndefined } from "../strokeAttributes";
+import type { BindTransform } from "../Sprite";
 
 type BaseShapeProps = {
   transform?: string;
+  /** See SvgSprite: binds the element carrying `transform` to the pose. */
+  bindTransform?: BindTransform;
   opacity?: number;
   style: SpriteStyle;
 };
@@ -29,8 +32,9 @@ type LineShapeProps = BaseShapeProps & {
 
 const SHAPE_BASE_SCALE = 10;
 
-export const EllipseSprite: React.FC<BasicShapeProps> = ({ transform, fill, stroke, strokeWidth, opacity, style }) => (
+export const EllipseSprite: React.FC<BasicShapeProps> = ({ transform, bindTransform, fill, stroke, strokeWidth, opacity, style }) => (
   <ellipse
+    ref={bindTransform?.(transform)}
     transform={transform}
     fill={fill}
     rx={SHAPE_BASE_SCALE / 2}
@@ -40,8 +44,9 @@ export const EllipseSprite: React.FC<BasicShapeProps> = ({ transform, fill, stro
   />
 );
 
-export const RectSprite: React.FC<BasicShapeProps> = ({ transform, fill, stroke, strokeWidth, opacity, style }) => (
+export const RectSprite: React.FC<BasicShapeProps> = ({ transform, bindTransform, fill, stroke, strokeWidth, opacity, style }) => (
   <rect
+    ref={bindTransform?.(transform)}
     transform={transform}
     fill={fill}
     x={-SHAPE_BASE_SCALE / 2}
@@ -55,6 +60,7 @@ export const RectSprite: React.FC<BasicShapeProps> = ({ transform, fill, stroke,
 
 export const HalfCircleSprite: React.FC<BasicShapeProps> = ({
   transform,
+  bindTransform,
   fill,
   stroke,
   strokeWidth,
@@ -62,6 +68,7 @@ export const HalfCircleSprite: React.FC<BasicShapeProps> = ({
   style,
 }) => (
   <path
+    ref={bindTransform?.(transform)}
     transform={transform}
     d={`M ${-SHAPE_BASE_SCALE / 2} 0 A ${SHAPE_BASE_SCALE / 2} ${SHAPE_BASE_SCALE / 2} 0 0 0 ${
       SHAPE_BASE_SCALE / 2
@@ -75,6 +82,7 @@ export const HalfCircleSprite: React.FC<BasicShapeProps> = ({
 /** Radial falloff ellipse; `solidUntil` is where the fade starts (0 fades from the center). */
 const RadialFadeSprite: React.FC<RadialGradientProps & { kind: "soft" | "fuzzy"; solidUntil?: string }> = ({
   transform,
+  bindTransform,
   fill,
   opacity,
   style,
@@ -98,6 +106,7 @@ const RadialFadeSprite: React.FC<RadialGradientProps & { kind: "soft" | "fuzzy";
     <>
       {inlineDefs}
       <ellipse
+        ref={bindTransform?.(transform)}
         transform={transform}
         fill={`url(#${gradId})`}
         rx={SHAPE_BASE_SCALE / 2}
@@ -115,8 +124,9 @@ export const SoftSprite: React.FC<RadialGradientProps> = (props) => (
 
 export const FuzzySprite: React.FC<RadialGradientProps> = (props) => <RadialFadeSprite {...props} kind="fuzzy" />;
 
-export const LineSprite: React.FC<LineShapeProps> = ({ transform, stroke, strokeWidth, opacity, style }) => (
+export const LineSprite: React.FC<LineShapeProps> = ({ transform, bindTransform, stroke, strokeWidth, opacity, style }) => (
   <line
+    ref={bindTransform?.(transform)}
     transform={transform}
     y1={-SHAPE_BASE_SCALE / 2}
     x1={0}

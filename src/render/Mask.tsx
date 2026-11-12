@@ -1,11 +1,33 @@
 import type { RenderNode } from "./RenderTree";
 import SvgSprite from "./Sprite";
 import SvgSpriteMask from "./SpriteMask";
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
 import { getSpriteSignature } from "./utils/getSpriteSignature";
-import { getMaskRegion } from "./spriteBounds";
+import { getMaskRegion, type Bounds } from "./spriteBounds";
+import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
+import { bindNodeTransform } from "./Group";
+
+/** A mask's region attributes: its members' bounds, or the default region when they have none. */
+const maskAttributesFor = (bounds: Bounds | null) =>
+  bounds
+    ? {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        maskUnits: "userSpaceOnUse" as const,
+        maskContentUnits: "userSpaceOnUse" as const,
+      }
+    : {
+        x: maskProps.x,
+        y: maskProps.y,
+        width: maskProps.width,
+        height: maskProps.height,
+        maskUnits: undefined,
+        maskContentUnits: "userSpaceOnUse" as const,
+      };
 
 type MaskProps = {
   id: string;
@@ -44,6 +66,7 @@ const SvgMask: React.FC<MaskProps> = ({
   withFill = true,
   withNoOutline = true,
 }) => {
+  const bindings = useContext(PoseBindingsContext);
   const uniqueGroups = useMemo(() => {
     const seen = new Set<string>();
     return groups.filter((group) => {
@@ -120,10 +143,16 @@ const SvgMask: React.FC<MaskProps> = ({
               strokeWidthOverride={outset > 0 ? outset * 2 : undefined}
               // A sprite mask is in node space, so only then does the node transform need its own <g>.
               baseTransform={spriteMaskId ? undefined : transform}
+              poseNode={group.id}
             />
           );
           return spriteMaskId ? (
-            <g key={`${group.id}_${mode}`} transform={transform} mask={`url(#${spriteMaskId})`}>
+            <g
+              key={`${group.id}_${mode}`}
+              ref={bindNodeTransform(bindings, group.id)}
+              transform={transform}
+              mask={`url(#${spriteMaskId})`}
+            >
               {sprite}
             </g>
           ) : (
@@ -138,29 +167,18 @@ const SvgMask: React.FC<MaskProps> = ({
     renderMaskContents("outline_mask")
   );
 
-  const maskAttributes: {
-    x: number | string;
-    y: number | string;
-    width: number | string;
-    height: number | string;
-    maskUnits?: "userSpaceOnUse";
-    maskContentUnits: "userSpaceOnUse";
-  } = bounds
-    ? {
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        maskUnits: "userSpaceOnUse",
-        maskContentUnits: "userSpaceOnUse",
-      }
-    : {
-        x: maskProps.x,
-        y: maskProps.y,
-        width: maskProps.width,
-        height: maskProps.height,
-        maskContentUnits: "userSpaceOnUse",
-      };
+  const maskAttributes = maskAttributesFor(bounds);
+  // The region follows the members, so a pose that moves one rewrites it.
+  const memberIds = uniqueGroups.map((group) => group.id);
+  const bindRegion = () =>
+    bindPose<Element>(bindings, memberIds, (element) => (get) => {
+      const region = maskAttributesFor(getMaskRegion(uniqueGroups.map((group) => get(group.id) ?? group), groupName));
+      setAttr(element, "x", region.x);
+      setAttr(element, "y", region.y);
+      setAttr(element, "width", region.width);
+      setAttr(element, "height", region.height);
+      setAttr(element, "maskUnits", region.maskUnits);
+    });
 
   return (
     <>
@@ -170,23 +188,23 @@ const SvgMask: React.FC<MaskProps> = ({
       {mode === "all" || mode === "fill_only" ? (
         <>
           {withFill ? (
-            <mask key={id} id={id} {...maskAttributes}>
+            <mask key={id} ref={bindRegion()} id={id} {...maskAttributes}>
               {renderMaskContents("mask")}
             </mask>
           ) : null}
           {mode === "all" ? (
-            <mask key={id + "_outline"} id={id + "_outline"} {...maskAttributes}>
+            <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
               {renderOutlineMaskContents()}
             </mask>
           ) : null}
           {withNoOutline ? (
-            <mask key={id + "_no_outline"} id={id + "_no_outline"} {...maskAttributes}>
+            <mask key={id + "_no_outline"} ref={bindRegion()} id={id + "_no_outline"} {...maskAttributes}>
               {renderMaskContents("mask_no_outline")}
             </mask>
           ) : null}
         </>
       ) : (
-        <mask key={id + "_outline"} id={id + "_outline"} {...maskAttributes}>
+        <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
           {renderOutlineMaskContents()}
         </mask>
       )}
