@@ -20,12 +20,13 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -b && vite build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p demo && tsc --noEmit -p test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p demo && tsc --noEmit -p test && tsc --noEmit -p bench",
     "dev": "vite build --watch",
     "demo": "vite --config demo/vite.config.ts",
     "demo:build": "vite build --config demo/vite.config.ts",
     "test": "vitest run --project unit",
     "test:snapshots": "vitest run --project browser",
+    "profile": "node bench/profile.mjs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {

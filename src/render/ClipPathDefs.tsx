@@ -84,4 +84,4 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
   );
 };
 
-export default ClipPathDefs;
+export default React.memo(ClipPathDefs);

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useMemo, useState, type ReactNode } from "react";
 import type { Node } from "../types/Node";
 import type { Color } from "../types/primitives";
 import type { RenderGroupOptions } from "../types/RenderGroup";
@@ -177,4 +177,5 @@ const RigLayers: React.FC<RigLayersProps> = ({
   );
 };
 
-export default RigLayers;
+// Re-renders only when a prop changes, so a parent re-render with the same rig skips the whole paint tree.
+export default memo(RigLayers);
