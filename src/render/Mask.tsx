@@ -160,6 +160,7 @@ const SvgMask: React.FC<MaskProps> = ({
       let minY = Infinity;
       let maxX = -Infinity;
       let maxY = -Infinity;
+      // Hidden members still count, so a group's bounds don't change when a driver hides or shows one.
       for (const group of uniqueGroups) {
         if (group.noSprite) continue;
         const localBounds = getSpriteLocalBounds(group.sprite);
@@ -289,7 +290,7 @@ const SvgMask: React.FC<MaskProps> = ({
   const renderMaskContents = (mode: "mask" | "outline_mask" | "mask_no_outline", ref?: React.Ref<SVGGElement>) => (
     <g key={`${id}_${mode}_content`} ref={ref}>
       {uniqueGroups.map((group) =>
-        group.noSprite ? null : wrapInClipMasks(group, (() => {
+        group.noSprite || group.hidden ? null : wrapInClipMasks(group, (() => {
           // maskGroupModes (positive/negative) control whether a node's shape is
           // included/excluded from the plain fill mask. The outline ring mask must
           // always use its own black-fill/white-stroke ring coloring regardless of

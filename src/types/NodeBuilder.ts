@@ -5,6 +5,8 @@ import type { Shape, Sprite } from "./Sprite";
 import type { TransformState } from "./TransformState";
 import type { Transform } from "./Transform";
 import type { RenderGroup } from "./RenderGroup";
+import type { DriverOutput, NodeDriver } from "./Driver";
+import type { Pose } from "./Pose";
 
 interface BuilderState {
   name: string;
@@ -57,6 +59,7 @@ interface BuilderState {
   opacity?: number;
   renderGroup?: RenderGroup;
   debugColor?: string;
+  drivers?: Omit<NodeDriver, "mirror">[];
 }
 
 export default class NodeBuilder {
@@ -215,6 +218,18 @@ export default class NodeBuilder {
   rotatesWith(...ds: number[]): NodeBuilder {
     const newRotation = ds.reduce((prev, curr) => prev + curr, this._state.rotation);
     return this.with({ rotation: newRotation });
+  }
+
+  /**
+   * Computes part of this node's transform, or its visibility, from the pose each time it is solved,
+   * instead of baking it in when the tree is built: a pose change then moves the node without a
+   * rebuild. `drive` reads joint rotations (`pose.rotations`) or named values (`pose.values`) and
+   * supplies its own defaults for anything missing. The output combines like `rotatesWith`,
+   * `translatesWithX`/`Y`, `scalesWithX`/`Y` and `skewsWith`, and `buildLeft` mirrors it the same
+   * way. Drivers stack: each one added applies on top of the others.
+   */
+  addDriver(drive: (pose: Pose) => DriverOutput): NodeBuilder {
+    return this.with({ drivers: [...(this._state.drivers ?? []), { evaluate: drive }] });
   }
 
   skewsWith(x: number = 0, y: number = 0): NodeBuilder {
@@ -620,6 +635,7 @@ export default class NodeBuilder {
       opacity: s.opacity,
       renderGroup: s.renderGroup,
       debugColor: s.debugColor,
+      drivers: s.drivers?.map((driver) => ({ ...driver, mirror: mult < 0 ? -1 : 1 })),
     };
   }
 

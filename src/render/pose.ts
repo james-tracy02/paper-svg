@@ -2,16 +2,31 @@
  * A rig is a node tree flattened once; a pose is joint values applied on top of it. Solving a pose
  * computes every node's world matrix in one pass, without rebuilding the tree: a pose change costs
  * matrix maths only. The per-node maths is RenderTree's own (`resolveNodeTransform`), so a solved
- * pose matches `getRenderNodes` on the same tree with the same rotations.
+ * pose matches `getRenderNodes` on the same tree with the same rotations; RenderTree builds its
+ * render nodes from a solved pose. Drivers (`NodeBuilder.addDriver`) are evaluated here, so values
+ * that follow a joint move with the pose too.
  */
 import type { Node } from "../types/Node";
+import type { Pose } from "../types/Pose";
 import type { Vector2 } from "../types/primitives";
 import type { MatrixTransform } from "../types/Transform";
-import { IDENTITY_MATRIX, resolveNodeTransform, type TargetMatrices } from "./RenderTree";
-import { combineMatrixTransforms, transformToMatrixWithMatrix } from "./transform";
+import { getGradientFrame } from "./gradient";
+import {
+  IDENTITY_MATRIX,
+  resolveArrivePath,
+  resolveNodeTransform,
+  resolvePatternSpace,
+  type TargetMatrices,
+} from "./nodeTransform";
+import {
+  combineMatrixTransforms,
+  invertMatrixTransform,
+  matrixTransformToSvg,
+  spriteUserSpace,
+  transformToMatrixWithMatrix,
+} from "./transform";
 
-/** Joint values by node id, on top of the rig's own. `rotate` (degrees) adds to the node's rotation. */
-export type Pose = Record<string, { rotate?: number }>;
+export type { Pose };
 
 export type RigEntry = {
   node: Node;
@@ -35,9 +50,54 @@ export type PoseSolution = {
   parentMatrices: MatrixTransform[];
   /** Parent scale applied to each entry's position (see RenderNode.translateScale). */
   translateScales: Vector2[];
+  /** Frame patterns tile in at each entry: its own `patternSpace`, else its nearest ancestor's. */
+  patternSpaces: (MatrixTransform | undefined)[];
+  /** Gradient frame each entry passes to its descendants: its own `gradientSpace: "define"`, else its ancestor's. */
+  gradientSpaces: (MatrixTransform | undefined)[];
+  /** For `gradientSpace: "inherit"` entries: the SVG gradientTransform that draws in the ancestor's frame. */
+  gradientTransforms: (string | undefined)[];
+  /** For `aimAt.arrive` entries: the curved path that meets the target's direction. */
+  dynamicPaths: (string | undefined)[];
+  /** Entries a driver hides (`visible: false`), directly or through an ancestor. */
+  hidden: boolean[];
 };
 
 const UNIT_SCALE: Vector2 = { x: 1, y: 1 };
+
+/**
+ * `node` with its pose rotation and its drivers' outputs applied, and whether a driver hides it.
+ * Returns `node` itself when neither changes it.
+ */
+const applyPose = (node: Node, pose: Pose): { node: Node; hidden: boolean } => {
+  const posedRotation = pose.rotations?.[node.id] ?? 0;
+  const posedTranslation = pose.translations?.[node.id];
+  const posedScale = pose.scales?.[node.id];
+  if (!node.drivers?.length && !posedTranslation && !posedScale) {
+    return { node: posedRotation ? { ...node, rotate: node.rotate + posedRotation } : node, hidden: false };
+  }
+  let rotate = node.rotate + posedRotation;
+  let x = node.translate.x + (posedTranslation?.x ?? 0);
+  let y = node.translate.y + (posedTranslation?.y ?? 0);
+  let scaleX = node.scale.x * (posedScale?.x ?? 1);
+  let scaleY = node.scale.y * (posedScale?.y ?? 1);
+  let skewX = node.skew?.x ?? 0;
+  let skewY = node.skew?.y ?? 0;
+  let hidden = false;
+  for (const driver of node.drivers ?? []) {
+    const out = driver.evaluate(pose);
+    const m = driver.mirror;
+    rotate += (out.rotate ?? 0) * m;
+    x += (out.x ?? 0) * m;
+    y += out.y ?? 0;
+    scaleX *= out.scaleX ?? 1;
+    scaleY *= out.scaleY ?? 1;
+    skewX += (out.skewX ?? 0) * m;
+    skewY += (out.skewY ?? 0) * m;
+    if (out.visible === false) hidden = true;
+  }
+  const skew = node.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
+  return { node: { ...node, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew }, hidden };
+};
 
 /** Flattens `root` into a rig. Build it once per structure; pose it with `solvePose`. */
 export const createRig = (root: Node): Rig => {
@@ -72,19 +132,25 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   const translateScales: Vector2[] = new Array(count);
   // The matrix a joint child hangs from: the entry's world matrix without its own scale.
   const jointBases: MatrixTransform[] = new Array(count);
+  const dynamicPaths: (string | undefined)[] = new Array(count);
   const solving = new Uint8Array(count);
   let unconstrained: MatrixTransform[] | undefined;
 
-  const posed = (node: Node): Node => {
-    const rotate = pose[node.id]?.rotate;
-    return rotate ? { ...node, rotate: node.rotate + rotate } : node;
-  };
+  // Each node as this pose leaves it. Parents come first, so a hidden parent hides its children.
+  const posedNodes: Node[] = new Array(count);
+  const hidden: boolean[] = new Array(count);
+  for (let i = 0; i < count; i += 1) {
+    const { node, parent } = rig.entries[i];
+    const posed = applyPose(node, pose);
+    posedNodes[i] = posed.node;
+    hidden[i] = posed.hidden || (parent >= 0 && hidden[parent]);
+  }
 
   /** One entry's matrices, given what it hangs from. */
   const solveEntry = (i: number, parentMatrix: MatrixTransform, targets: TargetMatrices | undefined) => {
-    const { node, parent, via } = rig.entries[i];
-    const scaleFactor = via === "joint" ? rig.entries[parent].node.scale : UNIT_SCALE;
-    const transform = resolveNodeTransform(posed(node), parentMatrix, scaleFactor, targets);
+    const { parent, via } = rig.entries[i];
+    const scaleFactor = via === "joint" ? posedNodes[parent].scale : UNIT_SCALE;
+    const transform = resolveNodeTransform(posedNodes[i], parentMatrix, scaleFactor, targets);
     return {
       world: combineMatrixTransforms(parentMatrix, transformToMatrixWithMatrix(transform)),
       jointBase: combineMatrixTransforms(parentMatrix, transformToMatrixWithMatrix({ ...transform, scale: UNIT_SCALE })),
@@ -132,7 +198,9 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
       const { node, parent } = rig.entries[i];
       if (parent >= 0) solve(parent);
       const parentMatrix = hangsFrom(i, matrices, jointBases);
-      const solved = solveEntry(i, parentMatrix, hasConstraint(node) ? targetsFor() : undefined);
+      const targets = hasConstraint(node) ? targetsFor() : undefined;
+      const solved = solveEntry(i, parentMatrix, targets);
+      if (node.aimAt?.arrive && targets) dynamicPaths[i] = resolveArrivePath(node.aimAt, solved.world, targets);
       matrices[i] = solved.world;
       jointBases[i] = solved.jointBase;
       parentMatrices[i] = parentMatrix;
@@ -144,5 +212,35 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   };
 
   for (let i = 0; i < count; i += 1) solve(i);
-  return { matrices, parentMatrices, translateScales };
+
+  // Pattern and gradient frames pass down the tree, so they follow entry order (parents first).
+  const patternSpaces: (MatrixTransform | undefined)[] = new Array(count);
+  const gradientSpaces: (MatrixTransform | undefined)[] = new Array(count);
+  const gradientTransforms: (string | undefined)[] = new Array(count);
+  for (let i = 0; i < count; i += 1) {
+    const { node, parent } = rig.entries[i];
+    const world = matrices[i];
+    const inheritedPattern = parent < 0 ? undefined : patternSpaces[parent];
+    const inheritedGradient = parent < 0 ? undefined : gradientSpaces[parent];
+    patternSpaces[i] = node.patternSpace ? resolvePatternSpace(node.patternSpace, world, inheritedPattern) : inheritedPattern;
+    gradientSpaces[i] =
+      node.gradientSpace === "define"
+        ? combineMatrixTransforms(spriteUserSpace(world, node.sprite), getGradientFrame(node.sprite))
+        : inheritedGradient;
+    if (node.gradientSpace === "inherit" && inheritedGradient) {
+      const inverse = invertMatrixTransform(spriteUserSpace(world, node.sprite));
+      if (inverse) gradientTransforms[i] = matrixTransformToSvg(combineMatrixTransforms(inverse, inheritedGradient), 6);
+    }
+  }
+
+  return {
+    matrices,
+    parentMatrices,
+    translateScales,
+    patternSpaces,
+    gradientSpaces,
+    gradientTransforms,
+    dynamicPaths,
+    hidden,
+  };
 };

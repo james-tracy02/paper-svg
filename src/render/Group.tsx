@@ -73,7 +73,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   skipClipPaths,
   skipFillWrappers,
 }) => {
-  if (g.noSprite) return null;
+  if (g.noSprite || g.hidden) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
   const articulated = Boolean(g.pointerEventsTarget) || g.parent?.articulated || g.articulated;

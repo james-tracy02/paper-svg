@@ -72,7 +72,7 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
           <clipPath key={clipId} id={clipId} clipPathUnits="userSpaceOnUse">
             {clipGroup.groups.map((member) => {
               const group = member.node;
-              if (group.noSprite) return null;
+              if (group.noSprite || group.hidden) return null;
               const nodeTransform = matrixTransformToSvg(group.matrix, 3);
               const spriteTransform = getSpriteTransform(group.sprite, 3);
               return renderClipElement(group.sprite, nodeTransform, spriteTransform, group.id, member.outset);

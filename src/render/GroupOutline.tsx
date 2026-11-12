@@ -14,7 +14,7 @@ export type SvgGroupOutlineProps = {
 };
 
 const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidth, scopeId, opacity }) => {
-  if (g.noSprite || g.sprite.stroke === "none") return null;
+  if (g.noSprite || g.hidden || g.sprite.stroke === "none") return null;
 
   const transform = matrixTransformToSvg(g.matrix);
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;

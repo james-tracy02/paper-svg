@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type { Sprite } from "./Sprite";
 import type { Transform } from "./Transform";
 import type { RenderGroup } from "./RenderGroup";
+import type { NodeDriver } from "./Driver";
 
 export type Node = Transform & {
   id: string;
@@ -139,4 +140,6 @@ export type Node = Transform & {
   disableOutlineHoisting?: boolean;
   clipMaskContribution?: boolean;
   debugColor?: string;
+  /** Values computed from the pose while a pose is solved (see `NodeBuilder.addDriver`). */
+  drivers?: NodeDriver[];
 };
