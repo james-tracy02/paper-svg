@@ -16,7 +16,7 @@ type GetRenderGroupOptions = (id: string) => RenderGroupOptions | undefined;
 /** A region and the nodes whose shapes make it, in paint order (a node joining twice is listed twice). */
 export type Region = { name: string; members: RenderNode[] };
 
-/** Every region by name, with its members (`addMaskGroup`, `addClippingGroup`). */
+/** Every region by name, with its members (`addToRegion`). */
 export const getRegions = (nodes: RenderNode[]): Map<string, Region> => {
   const map = new Map<string, Region>();
   for (const node of nodes) {
@@ -116,7 +116,7 @@ export type PaintItem =
   | { kind: "fill"; key: string; node: RenderNode }
   /** The node's fill with its own masks and clip-paths, then the mask outlines anchored to it. */
   | { kind: "standalone"; key: string; node: RenderNode; maskOutlines: RenderNode[] }
-  /** Mask outlines (`setMaskOutline`) anchored to the fill painted just before. */
+  /** Traced outlines (`traceOutline`) anchored to the fill painted just before. */
   | { kind: "maskOutlines"; key: string; nodes: RenderNode[] }
   /** Items sharing one mask or clip-path, applied once around all of them. */
   | { kind: "wrap"; key: string; wrapper: FillWrapper; items: PaintItem[] }
@@ -141,7 +141,7 @@ export type PlanLayersOptions = {
 
 /**
  * Whether a node takes a hard-edged region with insetting members as a clip-path. Not when the node is clipped
- * already (another region, its own mask or clip, or a render group's mask or clip): Chromium stops
+ * already (another region, its own cut, or a render group's mask or clip): Chromium stops
  * anti-aliasing clip-paths stacked that deep, which turns edges jagged (iris edges inside an eye clip, inside
  * the face clip). Those nodes take the mask, which draws the inner clip in its own layer. Hoisting regions,
  * which drew as clip-paths before regions, keep doing so.
@@ -151,7 +151,6 @@ const takesInsetClip = (node: RenderNode, region: string, getRenderGroupOptions:
   return (
     fillCuts(node).every((name) => name === region) &&
     !node.mask &&
-    !node.clip &&
     !renderGroup?.clip &&
     !renderGroup?.mask
   );

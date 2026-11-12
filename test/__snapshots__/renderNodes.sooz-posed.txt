@@ -58,7 +58,7 @@ lash_2_right_outline e4cb5b96c0d52198
 eyelash_binding_right 7c7f508180e6e203
 eyelash_shadow_right b1398e56761a319d
 eye_smile_right ac363eb6dfa0a717
-eye_smile_outline_right d493b85da7018e63
+eye_smile_outline_right f10ee040fd413741
 eyelid_right bac142b0df478661
 eye_bags_right 382ca5f541a79465
 eye_container_left ce1805792d19fffb
@@ -87,7 +87,7 @@ lash_2_left_outline ba4350a558c20345
 eyelash_binding_left 709f54c0018875c5
 eyelash_shadow_left 64f09806ccd62b93
 eye_smile_left 9eb30584b92fdac1
-eye_smile_outline_left 0fcec2ba93611f19
+eye_smile_outline_left 7a9ed5eec990bbc8
 eyelid_left 14781d2fc4169c92
 eye_bags_left df2830ed323d49a8
 eyebrow_buffer_right 63f374e5269db545

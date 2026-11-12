@@ -195,9 +195,9 @@ describe("drivers", () => {
     const masks = (nodes: RenderNode[]) => Object.fromEntries(nodes.map((n) => [n.id, n.mask]));
 
     it.each(["right", "left"] as const)("replace the node's own, as setMask would (%s side)", (side) => {
-      const driven = forearm((b) => b.setMask(narrow).addDriver((p) => ({ mask: forArm(p.rotations?.angle ?? 0) })), side);
+      const driven = forearm((b) => b.setCut(narrow).addDriver((p) => ({ mask: forArm(p.rotations?.angle ?? 0) })), side);
       for (const angle of [0, 30, 90]) {
-        const baked = forearm((b) => b.setMask(forArm(angle) ?? undefined), side);
+        const baked = forearm((b) => b.setCut(forArm(angle) ?? undefined), side);
         expect(masks(getRenderNodes(driven, { rotations: { angle } }))).toEqual(masks(getRenderNodes(baked)));
       }
     });

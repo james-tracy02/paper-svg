@@ -19,7 +19,7 @@ export type FillWrapTargets = {
 
 /**
  * Mask and clip-path ids a node's fill is wrapped in (see wrapFill): for each region cutting it, the full shape
- * when the node traces its outline (`setMaskOutline`), else the inset shape, as a clip-path where the plan lets
+ * when the node traces its outline (`traceOutline`), else the inset shape, as a clip-path where the plan lets
  * the node take one.
  */
 export const getFillWrapTargets = (g: RenderNode, skipClipPaths: boolean | undefined, forms: RegionForms): FillWrapTargets => {

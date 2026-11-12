@@ -8,7 +8,7 @@
  * out of the region for them (`inset`). Whether a cut is drawn as a <clipPath> or a <mask> is the engine's
  * choice (see layerPlan.ts).
  */
-import type { Node } from "../types/Node";
+import type { Node, RegionJoin } from "../types/Node";
 
 /** A node's shape joining a region. */
 export type RegionMember = {
@@ -17,13 +17,13 @@ export type RegionMember = {
   subtract?: boolean;
   /** Grows the node's shape in this region by this much on every side (world units). */
   outset?: number;
-  /** Adds only the part of the node its own cuts leave (`clipMaskContribution`). */
+  /** Adds only the part of the node its own cuts leave (`onlyWhereCut`). */
   onlyWhereCut?: boolean;
   /** Keeps nodes the region cuts inside this member's outline by cutting the outline out, instead of hoisting it. */
   inset?: boolean;
 };
 
-/** A region cutting a node: its fill, the outline it traces (`setMaskOutline`), or both. */
+/** A region cutting a node: its fill, the outline it traces (`traceOutline`), or both. */
 export type RegionCut = {
   region: string;
   fill: boolean;
@@ -56,62 +56,37 @@ export const memberOf = (node: { regions?: RegionMember[] }) => names(node.regio
 export const membership = (node: { regions?: RegionMember[] }, name: string): RegionMember | undefined =>
   node.regions?.find((member) => member.region === name);
 
-/** The masking fields a render node is resolved from: a node's own, with what its ancestors pass down. */
-export type ResolvedMasking = {
-  maskedBy: string[];
-  clippedBy: string[];
-  maskGroups: string[];
-  clippingGroups: string[];
-  maskGroupModes?: Record<string, "positive" | "negative">;
-};
+/** A node's joins and cuts: its own, then those its ancestors pass down. */
+export type ResolvedRegions = { joins: RegionJoin[]; cuts: string[] };
 
 /**
- * Today's masking fields on `body`, with what it inherits (`resolved`), as regions and cuts. Mask groups are
- * regions whose members inset their outlines; clip groups hoist them, unless the node disables hoisting.
+ * A node's regions as the renderer reads them: its joins (insetting its outline where the join or the node asks
+ * to, `insetOutlines`), and its cuts, each tracing the outline when the node traces its cuts' outlines.
  */
 export const resolveRegions = (
   body: Node,
-  resolved: ResolvedMasking,
+  resolved: ResolvedRegions,
 ): { regions?: RegionMember[]; cuts?: RegionCut[]; traceOutline?: boolean } => {
-  const traceOutline = body.outline?.masked;
-  const { outlineMaskedBy, outlineClippedBy } = body;
-  if (
-    !resolved.maskGroups.length &&
-    !resolved.clippingGroups.length &&
-    !resolved.maskedBy.length &&
-    !resolved.clippedBy.length &&
-    !traceOutline
-  ) {
-    return {};
-  }
-  const regions: RegionMember[] = [
-    ...resolved.maskGroups.map((region) => ({
-      region,
-      subtract: resolved.maskGroupModes?.[region] === "negative" || undefined,
-      outset: body.maskOutsets?.[region] || undefined,
-      onlyWhereCut: body.clipMaskContribution || undefined,
-      inset: true,
-    })),
-    ...resolved.clippingGroups.map((region) => ({
-      region,
-      outset: body.clipOutsets?.[region] || undefined,
-      inset: body.outline?.disableHoisting || undefined,
-    })),
-  ];
-  // A traced outline follows the fill's cuts unless the node names its own (outlineMaskedBy, outlineClippedBy).
-  const traces = (own: string[] | undefined) => Boolean(traceOutline) && own === undefined;
+  const trace = body.outline?.trace;
+  if (!resolved.joins.length && !resolved.cuts.length && !trace) return {};
+  const insetAll = body.outline?.inset;
+  const onlyWhereCut = body.regions?.onlyWhereCut;
+  const regions: RegionMember[] = resolved.joins.map((join) => ({
+    region: join.region,
+    subtract: join.subtract || undefined,
+    outset: join.outset || undefined,
+    onlyWhereCut: onlyWhereCut || undefined,
+    inset: join.inset || insetAll || undefined,
+  }));
+  // A traced outline follows the node's cuts, unless it names the regions it traces (`traceOutlineOf`).
+  const tracesCuts = trace === true;
   const cuts: RegionCut[] = [
-    ...resolved.maskedBy.map((region) => ({ region, fill: true, outline: traces(outlineMaskedBy) })),
-    ...resolved.clippedBy.map((region) => ({ region, fill: true, outline: traces(outlineClippedBy ?? outlineMaskedBy) })),
-    ...(traceOutline ? [...(outlineMaskedBy ?? []), ...(outlineClippedBy ?? [])] : []).map((region) => ({
-      region,
-      fill: false,
-      outline: true,
-    })),
+    ...resolved.cuts.map((region) => ({ region, fill: true, outline: tracesCuts })),
+    ...(Array.isArray(trace) ? trace : []).map((region) => ({ region, fill: false, outline: true })),
   ];
   return {
     regions: regions.length ? regions : undefined,
     cuts: cuts.length ? cuts : undefined,
-    traceOutline: traceOutline || undefined,
+    traceOutline: trace ? true : undefined,
   };
 };

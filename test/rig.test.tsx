@@ -41,10 +41,10 @@ describe("Rig", () => {
   it("generates region masks and clips under idPrefix and applies them", () => {
     const body = part("root")
       // An outset keeps it a <mask> rather than a clip-path.
-      .addMaskGroup("soft")
-      .setMaskOutset("soft", 1)
-      .addClippingGroup("hard")
-      .addJoints(part("masked").addMaskedBy("soft").build(), part("clipped").addClippedBy("hard").build())
+      .addToRegion("soft", { inset: true })
+      .setRegionOutset("soft", 1)
+      .addToRegion("hard")
+      .addJoints(part("masked").cutBy("soft").build(), part("clipped").cutBy("hard").build())
       .build();
     const svg = render({ body, idPrefix: "demo" });
 
@@ -57,7 +57,7 @@ describe("Rig", () => {
   it("draws a hard sprite mask as a <clipPath> and a soft one as a <mask>", () => {
     const hard = new SpriteBuilder().setShape("rect").setMaskScale(0.5).build();
     const soft = new SpriteBuilder().setShape("rect").setOpacity(0.5).build();
-    const body = part("root").addJoints(part("cut").setMask(hard).build(), part("faded").setMask(soft).build()).build();
+    const body = part("root").addJoints(part("cut").setCut(hard).build(), part("faded").setCut(soft).build()).build();
     const svg = render({ body, idPrefix: "demo" });
 
     expect(svg).toMatch(/<clipPath id="demo_cut_mask"[^>]*><rect [^>]*transform="[^"]*0\.5/);
@@ -66,20 +66,12 @@ describe("Rig", () => {
     expect(svg).toContain('mask="url(#demo_faded_mask)"');
   });
 
-  it("nests a node's own clip inside its hard sprite mask, as one element takes one clip-path", () => {
-    const rect = new SpriteBuilder().setShape("rect").build();
-    const body = part("root").addJoints(part("cut").setMask(rect).setClip(rect).build()).build();
-    const svg = render({ body, idPrefix: "demo" });
-
-    expect(svg).toMatch(/clip-path="url\(#demo_cut_mask\)"[^>]*><g clip-path="url\(#demo_cut_clip\)">/);
-  });
-
   it("cuts a member adding only where it's cut by its cutting region's <clipPath>, inside the other region's mask", () => {
     const body = part("root")
-      .addClippingGroup("hard")
+      .addToRegion("hard")
       .addJoints(
-        part("member").addMaskGroup("soft").addClippedBy("hard").clipMaskContribution().build(),
-        part("masked").addMaskedBy("soft").build(),
+        part("member").addToRegion("soft", { inset: true }).cutBy("hard").onlyWhereCut().build(),
+        part("masked").cutBy("soft").build(),
       )
       .build();
     const svg = render({ body, idPrefix: "demo" });
@@ -92,8 +84,8 @@ describe("Rig", () => {
     const d = "M 0 0 L 10 0 L 10 10 Z";
     const body = part("root")
       .setSprite(new SpriteBuilder().setPath(d).build())
-      .addClippingGroup("hard")
-      .addJoints(part("clipped").addClippedBy("hard").build())
+      .addToRegion("hard")
+      .addJoints(part("clipped").cutBy("hard").build())
       .build();
     const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_region"[^>]*>(.*?)<\/clipPath>/)?.[1];
 
@@ -102,7 +94,7 @@ describe("Rig", () => {
 
   it("does not draw a node restricted to a group nobody defines", () => {
     const body = part("root")
-      .addJoints(part("masked").addMaskedBy("missing").build(), part("clipped").addClippedBy("missing").build())
+      .addJoints(part("masked").cutBy("missing").build(), part("clipped").cutBy("missing").build())
       .build();
     const svg = render({ body });
 
@@ -155,9 +147,9 @@ describe("outlines", () => {
   it("hoists a clip group owner's outline above its dependents, cut by the owner's own sprite mask", () => {
     const body = new NodeBuilder("owner")
       .setSprite(stroked("#00ff00").build())
-      .setMask(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
-      .addClippingGroup("hard")
-      .addJoints(part("dependent").setZIndex(3).addClippedBy("hard").build())
+      .setCut(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
+      .addToRegion("hard")
+      .addJoints(part("dependent").setZIndex(3).cutBy("hard").build())
       .build();
     const svg = render({ body });
 

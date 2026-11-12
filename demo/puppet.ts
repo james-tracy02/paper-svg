@@ -145,7 +145,7 @@ const torso = (options: PuppetOptions): Node => {
     .setRotation(35)
     .setZIndex(1)
     .setSprite(paint.setFill("#ef4444").setShape("rect").setScale(13, 1.7).build())
-    .addClippedBy(options.clipSash ? TORSO_CLIP : undefined)
+    .cutBy(options.clipSash ? TORSO_CLIP : undefined)
     .build();
 
   const badge = new NodeBuilder("badge")
@@ -164,7 +164,7 @@ const torso = (options: PuppetOptions): Node => {
   return new NodeBuilder("torso")
     .setArticulated(false)
     .setSprite(paint.setFill(options.shirtColor).setShape("ellipse").setScale(7.2, 10.5).build())
-    .addClippingGroup(TORSO_CLIP)
+    .addToRegion(TORSO_CLIP)
     .addJoints(head(options), arm("right", options), arm("left", options), leg("right", options), leg("left", options))
     .addAttachments(sash, badge)
     .build();

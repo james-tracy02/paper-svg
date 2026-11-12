@@ -5,7 +5,7 @@
 export type { Color, Vector2 } from "./types/primitives";
 
 /* ---- core types ---- */
-export type { Node } from "./types/Node";
+export type { Node, NodeOutline, NodeRegions, RegionJoin } from "./types/Node";
 export type { DriverOutput, NodeDriver } from "./types/Driver";
 export type { Pose } from "./types/Pose";
 export type {

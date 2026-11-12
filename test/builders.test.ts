@@ -92,13 +92,13 @@ describe("NodeBuilder", () => {
     expect(left.sprite.scale).toEqual({ x: -2, y: 3 });
   });
 
-  it("skips undefined children and group names", () => {
+  it("skips undefined children and region names", () => {
     const child = new NodeBuilder("child").build();
-    const node = new NodeBuilder("part").addJoints(undefined, child).addAttachments(undefined).addMaskedBy(undefined, "", "m").build();
+    const node = new NodeBuilder("part").addJoints(undefined, child).addAttachments(undefined).cutBy([undefined, "", "m"]).build();
 
     expect(node.joints).toEqual([child]);
     expect(node.attachments).toEqual([]);
-    expect(node.maskedBy).toEqual(["m"]);
+    expect(node.regions?.cuts).toEqual(["m"]);
   });
 });
 

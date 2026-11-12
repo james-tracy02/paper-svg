@@ -100,8 +100,8 @@ describe("mask inheritance", () => {
   it("passes masks to descendants until stopped", () => {
     const grandchild = new NodeBuilder("grandchild").build();
     const child = new NodeBuilder("child").addJoints(grandchild).build();
-    const stopped = new NodeBuilder("stopped").stopInheritedMasking().build();
-    const nodes = byId(new NodeBuilder("root").addMaskedBy("m").inheritMaskingForChildren().addJoints(child, stopped).build());
+    const stopped = new NodeBuilder("stopped").stopInheritedCuts().build();
+    const nodes = byId(new NodeBuilder("root").cutBy("m").cutsForChildren().addJoints(child, stopped).build());
 
     expect(fillCuts(nodes.get("child")!)).toEqual(["m"]);
     expect(fillCuts(nodes.get("grandchild")!)).toEqual(["m"]);
@@ -110,7 +110,7 @@ describe("mask inheritance", () => {
 
   it("adds descendants to their ancestor's groups", () => {
     const child = new NodeBuilder("child").build();
-    const nodes = byId(new NodeBuilder("root").addMaskGroup("m").addClippingGroup("c").inheritGroupsForChildren().addJoints(child).build());
+    const nodes = byId(new NodeBuilder("root").addToRegion("m", { inset: true }).addToRegion("c").regionsForChildren().addJoints(child).build());
 
     expect(nodes.get("child")!.regions).toEqual([
       { region: "m", subtract: undefined, outset: undefined, onlyWhereCut: undefined, inset: true },

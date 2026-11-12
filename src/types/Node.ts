@@ -48,10 +48,11 @@ export type NodeFollow = {
 export type NodePaint = {
   /** Draws nothing for this node; its children still draw. */
   noSprite?: boolean;
-  /** A soft mask in the node's own space. */
+  /**
+   * The node's own cut, in its own space (`setCut`): only what lies inside this shape draws. The engine draws it
+   * as a clip-path when its edges are hard, else as a mask.
+   */
   mask?: Sprite;
-  /** A hard clip in the node's own space. */
-  clip?: Sprite;
   /** Multiplies this node's and its descendants' opacity. */
   opacity?: number;
   blendMode?: CSSProperties["mixBlendMode"];
@@ -82,10 +83,51 @@ export type NodePaint = {
 export type NodeOutline = {
   /** Draws the outline as its own layer at this z-index, instead of with the fill. */
   zIndex?: number;
-  /** Cuts the outline by the node's mask groups (or `outlineMaskedBy`) as its own layer. */
-  masked?: boolean;
-  /** Keeps the outline from being drawn over the nodes clipped to this one. */
-  disableHoisting?: boolean;
+  /**
+   * Draws the node over the outlines of regions, in its own outline colour, where it covers them (`traceOutline`):
+   * true for the regions cutting the node, or the names of other regions (`traceOutlineOf`). The node's fill is
+   * then cut by those regions' full shapes, outlines included.
+   */
+  trace?: true | string[];
+  /**
+   * Keeps nodes this node's regions cut inside this node's outline by cutting the outline's inner half out of
+   * the regions, instead of lifting the outline above those nodes (hoisting, the default). Applies to every
+   * region the node joins (`insetOutlines`).
+   */
+  inset?: boolean;
+};
+
+/** A node's shape joining a region (`NodeBuilder.addToRegion`). */
+export type RegionJoin = {
+  region: string;
+  /** Removes the node's shape from the region instead of adding it. */
+  subtract?: boolean;
+  /** Grows the node's shape in the region by this much on every side (world units). */
+  outset?: number;
+  /** Insets the node's outline in this region instead of hoisting it (see `NodeOutline.inset`). */
+  inset?: boolean;
+};
+
+/**
+ * The regions a node joins and is cut by. A region is the shapes of its members, added or subtracted; a node
+ * cut by a region draws only inside it, and inside its members' outlines (see `NodeOutline.inset`). Whether a
+ * region draws as a clip-path or a mask is the engine's choice.
+ */
+export type NodeRegions = {
+  /** Regions this node's shape joins. */
+  joins?: RegionJoin[];
+  /** Regions this node is cut by. */
+  cuts?: string[];
+  /** Adds this node to its regions only where its own cuts leave it. */
+  onlyWhereCut?: boolean;
+  /** Passes this node's joins down, so every descendant joins the same regions. */
+  regionsForChildren?: boolean;
+  /** Passes this node's cuts down, so every descendant is cut by the same regions. */
+  cutsForChildren?: boolean;
+  /** Ignores joins passed down from ancestors, for this node and its descendants. */
+  stopInheritedRegions?: boolean;
+  /** Ignores cuts passed down from ancestors, for this node and its descendants. */
+  stopInheritedCuts?: boolean;
 };
 
 /** How a node responds to the pointer. */
@@ -125,51 +167,7 @@ export type Node = {
   outline?: NodeOutline;
   interaction?: NodeInteraction;
 
-  // Masking stays flat until regions replace it (Phase 2).
-  maskedBy?: string[];
-  outlineMaskedBy?: string[];
-  maskGroups?: string[];
-  maskGroupModes?: Record<string, "positive" | "negative">;
-  maskOutsets?: Record<string, number>;
-  parentMaskedBy?: string[];
-
-  clippedBy?: string[];
-  /** Clip groups for this node's mask outline instead of `clippedBy`, so the fill and outline can be clipped differently. */
-  outlineClippedBy?: string[];
-  clippingGroups?: string[];
-  clipOutsets?: Record<string, number>;
-  /**
-   * When true, this node's own `maskedBy` (mask groups) and `clippedBy` (clip groups)
-   * values are automatically inherited by every descendant joint and attachment, in
-   * addition to whatever they already have. Unlike `parentMaskedBy` (an explicit list you
-   * supply yourself), this reuses the node's own values — set once here, no need to repeat
-   * them on every child.
-   */
-  inheritMaskingForChildren?: boolean;
-  /**
-   * When true, this node ignores any `maskedBy`/`clippedBy` values that were being passed
-   * down from an ancestor's `inheritMaskingForChildren` — this node (and, since the break
-   * happens at the propagation source, its descendants) will not receive them. Does not
-   * affect this node's own explicit `maskedBy`/`clippedBy` values, only inherited ones.
-   */
-  stopInheritedMasking?: boolean;
-  /**
-   * When true, this node's own `maskGroups` (mask groups it defines/belongs to) and
-   * `clippingGroups` (clip groups it defines/belongs to) — along with their
-   * `maskGroupModes` — are automatically inherited by every descendant joint and
-   * attachment, in addition to whatever groups they already declare. This makes every
-   * descendant also contribute its own geometry to those same mask/clip groups, without
-   * having to repeat `addMaskGroup`/`addClippingGroups` on each child.
-   */
-  inheritGroupsForChildren?: boolean;
-  /**
-   * When true, this node ignores any `maskGroups`/`clippingGroups`/`maskGroupModes`
-   * values that were being passed down from an ancestor's `inheritGroupsForChildren` — this
-   * node (and its descendants, since the break happens at the propagation source) will not
-   * receive them. Does not affect this node's own explicit group declarations.
-   */
-  stopInheritedGroups?: boolean;
-  clipMaskContribution?: boolean;
+  regions?: NodeRegions;
 
   debugColor?: string;
 };

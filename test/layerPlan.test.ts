@@ -50,8 +50,8 @@ describe("resolveVisibleNodes", () => {
   it("drops nodes restricted to a mask or clip group nobody defines", () => {
     const body = root(
       part("kept", 1).build(),
-      part("masked", 2).addMaskedBy("missing").build(),
-      part("clipped", 3).addClippedBy("missing").build(),
+      part("masked", 2).cutBy("missing").build(),
+      part("clipped", 3).cutBy("missing").build(),
     );
 
     expect(ids(resolveVisibleNodes(sorted(body)))).toEqual(["root", "kept"]);
@@ -60,9 +60,9 @@ describe("resolveVisibleNodes", () => {
   it("hoists a stroked clip owner's outline just above its highest dependent, without changing the input", () => {
     const nodes = sorted(
       root(
-        part("torso", 1, true).addClippingGroup("hard").build(),
-        part("shirt", 5).addClippedBy("hard").build(),
-        part("belt", 3).addClippedBy("hard").build(),
+        part("torso", 1, true).addToRegion("hard").build(),
+        part("shirt", 5).cutBy("hard").build(),
+        part("belt", 3).cutBy("hard").build(),
       ),
     );
     const visible = resolveVisibleNodes(nodes);
@@ -79,8 +79,8 @@ describe("resolveVisibleNodes", () => {
     const visible = resolveVisibleNodes(
       sorted(
         root(
-          part("skirt_outline", 1, true).addClippingGroup("hard").build(),
-          part("dependent", 2).addClippedBy("hard").build(),
+          part("skirt_outline", 1, true).addToRegion("hard").build(),
+          part("dependent", 2).cutBy("hard").build(),
         ),
       ),
     );
@@ -93,9 +93,9 @@ describe("resolveVisibleNodes", () => {
     const visible = resolveVisibleNodes(
       sorted(
         root(
-          part("plain", 1).addClippingGroup("a").build(),
-          part("optedOut", 2, true).addClippingGroup("b").disableOutlineHoisting().build(),
-          part("dependent", 3).addClippedBy("a", "b").build(),
+          part("plain", 1).addToRegion("a").build(),
+          part("optedOut", 2, true).addToRegion("b").insetOutlines().build(),
+          part("dependent", 3).cutBy(["a", "b"]).build(),
         ),
       ),
     );
@@ -106,8 +106,8 @@ describe("resolveVisibleNodes", () => {
 
 describe("planLayers paint order", () => {
   // Stroked below the nodes it masks, so the mask cuts out its outline band and stays a <mask>.
-  const skin = part("skin", 1, true).addMaskGroup("soft").build();
-  const masked = (name: string, z: number) => part(name, z).addMaskedBy("soft").build();
+  const skin = part("skin", 1, true).addToRegion("soft", { inset: true }).build();
+  const masked = (name: string, z: number) => part(name, z).cutBy("soft").build();
 
   it("wraps neighbouring fills that share a mask once", () => {
     expect(paintOrder(plan(root(skin, masked("a", 2), masked("b", 3))).items)).toEqual(["skin", { [SOFT]: ["a", "b"] }]);
@@ -133,10 +133,10 @@ describe("planLayers paint order", () => {
 
   it("paints a render group where its last member is, without the wrappers the group applies itself", () => {
     const body = root(
-      part("frame", 1).addClippingGroup("hard").build(),
-      part("a", 2).addClippedBy("hard").setRenderGroup("g").build(),
+      part("frame", 1).addToRegion("hard").build(),
+      part("a", 2).cutBy("hard").setRenderGroup("g").build(),
       part("c", 2.5).build(),
-      part("b", 3).addClippedBy("hard").setRenderGroup("g").build(),
+      part("b", 3).cutBy("hard").setRenderGroup("g").build(),
     );
     const { items } = plan(body, { g: { clip: "hard", opacity: 2 } });
 
@@ -152,8 +152,8 @@ describe("planLayers paint order", () => {
 
   it("paints a mask outline after its clip owner's outline when that outline is at or above it", () => {
     const body = root(
-      part("torso", 1, true).addClippingGroup("hard").build(),
-      part("sleeve", 3).addClippedBy("hard").setMaskOutline(true).build(),
+      part("torso", 1, true).addToRegion("hard").build(),
+      part("sleeve", 3).cutBy("hard").traceOutline(true).build(),
     );
 
     expect(paintOrder(plan(body).items)).toEqual([
@@ -166,8 +166,8 @@ describe("planLayers paint order", () => {
 
   it("paints a mask outline after its own fill when the owner has no outline above it", () => {
     const body = root(
-      part("torso", 1).addClippingGroup("hard").build(),
-      part("sleeve", 3).addClippedBy("hard").setMaskOutline(true).build(),
+      part("torso", 1).addToRegion("hard").build(),
+      part("sleeve", 3).cutBy("hard").traceOutline(true).build(),
     );
 
     expect(paintOrder(plan(body).items)).toEqual(["torso", { [HARD]: ["sleeve"] }, "mask outlines sleeve"]);
@@ -200,10 +200,10 @@ describe("planLayers defs", () => {
     };
   };
   // Stroked below the nodes it cuts, insetting (a mask group member), so the inset shape needs a mask.
-  const skin = () => part("skin", 1, true).addMaskGroup("soft").build();
+  const skin = () => part("skin", 1, true).addToRegion("soft", { inset: true }).build();
 
   it("builds only the shapes visible nodes use", () => {
-    expect(shapes(root(skin(), part("a", 2).addMaskedBy("soft").build()))).toEqual({
+    expect(shapes(root(skin(), part("a", 2).cutBy("soft").build()))).toEqual({
       forms: { soft: { full: undefined, inset: { clip: undefined, mask: "t_soft_region_inset" }, outline: undefined } },
       clips: [],
       masks: ["t_soft_region_inset"],
@@ -211,7 +211,7 @@ describe("planLayers defs", () => {
   });
 
   it("cuts a node tracing its outline by the full shape, and its outline by the outline ring", () => {
-    expect(shapes(root(skin(), part("a", 2).addMaskedBy("soft").setMaskOutline(true).build()))).toEqual({
+    expect(shapes(root(skin(), part("a", 2).cutBy("soft").traceOutline(true).build()))).toEqual({
       forms: { soft: { full: { clip: "t_soft_region", mask: undefined }, inset: undefined, outline: "t_soft_region_outline" } },
       clips: ["t_soft_region"],
       masks: ["t_soft_region_outline"],
@@ -221,8 +221,8 @@ describe("planLayers defs", () => {
   it("draws regions from the original nodes, not the hoisted copies", () => {
     const { nodes, defs } = plan(
       root(
-        part("torso", 1, true).addClippingGroup("hard").addMaskGroup("soft").build(),
-        part("shirt", 2).addClippedBy("hard").addMaskedBy("soft").build(),
+        part("torso", 1, true).addToRegion("hard").addToRegion("soft", { inset: true }).build(),
+        part("shirt", 2).cutBy("hard").cutBy("soft").build(),
       ),
     );
     const soft = defs.masks.find((def) => def.region === "soft")!;
@@ -232,11 +232,11 @@ describe("planLayers defs", () => {
   });
 
   it("hoists a member's outline above the nodes its region cuts, unless the member insets it", () => {
-    const hoisted = plan(root(part("owner", 1, true).addClippingGroup("hard").build(), part("cut", 5).addClippedBy("hard").build()));
+    const hoisted = plan(root(part("owner", 1, true).addToRegion("hard").build(), part("cut", 5).cutBy("hard").build()));
     const inset = plan(
       root(
-        new NodeBuilder("owner").setSprite(sprite(true)).setZIndex(1, "absolute").addClippingGroup("hard").disableOutlineHoisting().build(),
-        part("cut", 5).addClippedBy("hard").build(),
+        new NodeBuilder("owner").setSprite(sprite(true)).setZIndex(1, "absolute").addToRegion("hard").insetOutlines().build(),
+        part("cut", 5).cutBy("hard").build(),
       ),
     );
 
@@ -250,10 +250,10 @@ describe("planLayers defs", () => {
       const { defs, items } = plan(root(...children));
       return { clip: Boolean(defs.forms.get("soft")?.inset?.clipId), masks: defs.masks.length, order: paintOrder(items) };
     };
-    const user = () => part("a", 5).addMaskedBy("soft").build();
+    const user = () => part("a", 5).cutBy("soft").build();
 
     it("with plain members", () => {
-      expect(asClip(part("skin", 1).addMaskGroup("soft").build(), user())).toEqual({
+      expect(asClip(part("skin", 1).addToRegion("soft", { inset: true }).build(), user())).toEqual({
         clip: true,
         masks: 0,
         order: ["skin", { "clip:t_soft_region": ["a"] }],
@@ -261,7 +261,7 @@ describe("planLayers defs", () => {
     });
 
     it("with an insetting member painting its outline above every node it cuts", () => {
-      expect(asClip(part("skin", 9, true).addMaskGroup("soft").build(), user()).clip).toBe(true);
+      expect(asClip(part("skin", 9, true).addToRegion("soft", { inset: true }).build(), user()).clip).toBe(true);
     });
 
     it("but not when the outline paints below a node it cuts, as the mask leaves out the outline's inner half", () => {
@@ -271,9 +271,9 @@ describe("planLayers defs", () => {
     it("only for nodes not clipped already, as Chromium stops anti-aliasing clips stacked deeper", () => {
       const { defs, items } = plan(
         root(
-          part("skin", 1).addMaskGroup("soft").addClippingGroup("hard").build(),
-          part("a", 5).addMaskedBy("soft").build(),
-          part("b", 6).addMaskedBy("soft").addClippedBy("hard").build(),
+          part("skin", 1).addToRegion("soft", { inset: true }).addToRegion("hard").build(),
+          part("a", 5).cutBy("soft").build(),
+          part("b", 6).cutBy("soft").cutBy("hard").build(),
         ),
       );
 
@@ -287,8 +287,8 @@ describe("planLayers defs", () => {
     });
 
     it("but not when a member subtracts", () => {
-      const cut = part("cut", 2).addMaskGroup("soft", "negative").build();
-      expect(asClip(part("skin", 1).addMaskGroup("soft").build(), cut, user()).clip).toBe(false);
+      const cut = part("cut", 2).addToRegion("soft", { inset: true, subtract: true }).build();
+      expect(asClip(part("skin", 1).addToRegion("soft", { inset: true }).build(), cut, user()).clip).toBe(false);
     });
   });
 });

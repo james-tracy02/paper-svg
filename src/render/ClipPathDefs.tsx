@@ -63,7 +63,7 @@ const renderClipElement = (
     });
   }
   if (sprite.dynamicPath) {
-    // An outset of 0 (addClippingGroup's default) leaves the path as is, without offsetting it.
+    // An outset of 0 leaves the path as is, without offsetting it.
     const outsetPath = (path: string) => (outset ? outsetPathData(path, outset) : path);
     const drivenPath = (node: RenderNode) => node.sprite.dynamicPath && outsetPath(node.sprite.dynamicPath);
     return (
