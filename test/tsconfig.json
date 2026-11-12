@@ -1,4 +1,7 @@
 {
   "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": { "paper-svg": ["../src/index.ts"] }
+  },
   "include": ["."]
 }
