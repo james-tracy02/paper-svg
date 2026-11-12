@@ -63,6 +63,7 @@ export type { RigProps, RigHandle, RigEffects, GlowConfig, TintConfig } from "./
 export { default as RigLayers } from "./render/RigLayers";
 export type { RigLayersProps, RigNodeInteraction } from "./render/RigLayers";
 export { useRenderNodes } from "./render/useRenderNodes";
+export { bakePose } from "./render/pose";
 export { resolveRotationPivot } from "./render/rotationPivot";
 export type { RotationPivotOptions } from "./render/rotationPivot";
 

@@ -1,5 +1,5 @@
 import type { Pose } from "./Pose";
-import type { CustomSprite } from "./Sprite";
+import type { CustomSprite, Sprite } from "./Sprite";
 
 /**
  * What a driver does to its node for the current pose. Each field combines with the node's own
@@ -16,6 +16,10 @@ import type { CustomSprite } from "./Sprite";
  * sprite's colors, stroke and transform stay. Return the same `customSprite` object while it is
  * unchanged, so the node only re-renders when the shape does. When several drivers set one, the
  * last wins.
+ *
+ * `mask` replaces the node's own mask (`setMask`) for this pose, for masks that follow a joint; `null`
+ * removes it. Like `setMask`, it is in the node's space and `buildLeft` mirrors it. Return the same
+ * object while the mask is unchanged: a new one redraws the node.
  */
 export type DriverOutput = {
   rotate?: number;
@@ -30,6 +34,7 @@ export type DriverOutput = {
   outlineZIndex?: number;
   path?: string;
   customSprite?: CustomSprite;
+  mask?: Sprite | null;
 };
 
 /**

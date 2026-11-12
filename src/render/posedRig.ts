@@ -16,6 +16,7 @@ import type { Vector2 } from "../types/primitives";
 import { createRig, solvePose, type PoseSolution, type Rig } from "./pose";
 import { buildRenderTreeFromPose, flattenRenderTree, type RenderNode } from "./RenderTree";
 import { resolveVisibleNodes } from "./layerPlan";
+import { outlineMaskOf } from "./outline";
 
 export type RigLayout = {
   readonly rig: Rig;
@@ -82,10 +83,16 @@ const sameMatrix = (a: MatrixTransform | undefined, b: MatrixTransform | undefin
     a.matrix.d === b.matrix.d);
 
 /** The fields of a render node a pose can change, besides its z-index (see `createRigLayout`). */
-export type Placement = Pick<RenderNode, "matrix" | "parentMatrix" | "translateScale" | "patternSpace" | "hidden"> & {
+export type Placement = Pick<RenderNode, "matrix" | "parentMatrix" | "translateScale" | "patternSpace" | "hidden" | "mask"> & {
   gradientTransform?: string;
   dynamicPath?: string;
   customSprite?: CustomSprite;
+};
+
+/** An entry's mask in `solution`: a driver's, else the node's own. */
+const maskOf = (index: number, rig: Rig, solution: PoseSolution) => {
+  const driven = solution.masks[index];
+  return driven === undefined ? rig.entries[index].node.paint?.mask : (driven ?? undefined);
 };
 
 /** Where `solution` places `node`, and its shape, as a fresh walk of the posed tree would make them. */
@@ -99,6 +106,7 @@ export const placementOf = (node: RenderNode, index: number, rig: Rig, solution:
     // Only nodes with a pattern take a pattern space; outlines copy their owner's.
     patternSpace: node.patternSpace === undefined ? undefined : solution.patternSpaces[index],
     hidden: solution.hidden[index] || undefined,
+    mask: node.outlineOf === undefined ? maskOf(index, rig, solution) : outlineMaskOf(maskOf(index, rig, solution)),
     gradientTransform: solution.gradientTransforms[index] ?? own.gradientTransform,
     dynamicPath: solution.dynamicPaths[index] ?? own.dynamicPath,
     customSprite: solution.customSprites[index] ?? own.customSprite,
@@ -111,6 +119,7 @@ export const isPlacedAt = (node: RenderNode, at: Placement) =>
   sameVector(node.translateScale, at.translateScale) &&
   sameMatrix(node.patternSpace, at.patternSpace) &&
   node.hidden === at.hidden &&
+  node.mask === at.mask &&
   node.sprite.gradientTransform === at.gradientTransform &&
   node.sprite.dynamicPath === at.dynamicPath &&
   node.sprite.customSprite === at.customSprite;
@@ -124,6 +133,7 @@ export const samePlacement = (a: RenderNode, b: RenderNode) =>
     translateScale: b.translateScale,
     patternSpace: b.patternSpace,
     hidden: b.hidden,
+    mask: b.mask,
     gradientTransform: b.sprite.gradientTransform,
     dynamicPath: b.sprite.dynamicPath,
     customSprite: b.sprite.customSprite,
