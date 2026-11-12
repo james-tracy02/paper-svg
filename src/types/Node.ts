@@ -82,7 +82,7 @@ export type Node = Transform & {
   parentMaskedBy?: string[];
 
   clippedBy?: string[];
-  /** True-clip groups for this node's mask outline instead of `clippedBy`, so the fill and outline can be clipped differently. */
+  /** Clip groups for this node's mask outline instead of `clippedBy`, so the fill and outline can be clipped differently. */
   outlineClippedBy?: string[];
   clippingGroups?: string[];
   clipOutsets?: Record<string, number>;
@@ -103,7 +103,7 @@ export type Node = Transform & {
   stopInheritedMasking?: boolean;
   /**
    * When true, this node's own `maskGroups` (mask groups it defines/belongs to) and
-   * `clippingGroups` (true clip-path groups it defines/belongs to) — along with their
+   * `clippingGroups` (clip groups it defines/belongs to) — along with their
    * `maskGroupModes` — are automatically inherited by every descendant joint and
    * attachment, in addition to whatever groups they already declare. This makes every
    * descendant also contribute its own geometry to those same mask/clip groups, without

@@ -338,7 +338,8 @@ export default class NodeBuilder {
     return this.with({ maskedBy: [...this._state.maskedBy, ...filtered] });
   }
 
-  addOutlineClippedBy(...names: Array<string | undefined | null>): NodeBuilder {
+  /** Masks this node's mask outline by these mask groups instead of its `addMaskedBy` ones. */
+  addOutlineMaskedBy(...names: Array<string | undefined | null>): NodeBuilder {
     const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
     if (!filtered.length) {
       return this;
@@ -384,8 +385,8 @@ export default class NodeBuilder {
     return this.with({ clippedBy: [...this._state.clippedBy, ...filtered] });
   }
 
-  /** Clips this node's mask outline by these true-clip groups instead of its `addClippedBy` ones. */
-  addOutlineTrueClippedBy(...names: Array<string | undefined | null>): NodeBuilder {
+  /** Clips this node's mask outline by these clip groups instead of its `addClippedBy` ones. */
+  addOutlineClippedBy(...names: Array<string | undefined | null>): NodeBuilder {
     const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
     if (!filtered.length) {
       return this;
@@ -394,7 +395,7 @@ export default class NodeBuilder {
   }
 
   /**
-   * When enabled, this node's own maskedBy (mask groups) and clippedBy (true clip groups)
+   * When enabled, this node's own maskedBy (mask groups) and clippedBy (clip groups)
    * values are automatically inherited by every descendant joint and attachment, in
    * addition to whatever they already have — no need to repeat them on every child.
    */
@@ -413,7 +414,7 @@ export default class NodeBuilder {
   }
 
   /**
-   * When enabled, this node's own maskGroups/clippingGroups (the mask & true clip-path
+   * When enabled, this node's own maskGroups/clippingGroups (the mask and clip
    * groups it defines/belongs to, along with their maskGroupModes) are automatically
    * inherited by every descendant joint and attachment, in addition to whatever groups
    * they already declare. Every descendant then also contributes its geometry to those
@@ -424,7 +425,7 @@ export default class NodeBuilder {
   }
 
   /**
-   * When enabled, this node ignores any clippingGroups/trueClippingGroups/maskGroupModes
+   * When enabled, this node ignores any maskGroups/clippingGroups/maskGroupModes
    * being passed down from an ancestor's inheritGroupsForChildren — breaking the chain
    * here so this node (and its descendants) stop receiving them. Does not affect this
    * node's own explicit addMaskGroup/addClippingGroups declarations.
@@ -483,7 +484,7 @@ export default class NodeBuilder {
   }
 
   /**
-   * This node adds only its true-clipped (addClippedBy) shape to its mask groups, not its full sprite.
+   * This node adds only its clipped (addClippedBy) shape to its mask groups, not its full sprite.
    * Done with a soft mask of each clip group, since browsers ignore clip-path inside <mask> content.
    */
   clipMaskContribution(): NodeBuilder {

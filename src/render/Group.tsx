@@ -48,7 +48,7 @@ export type SvgGroupProps = {
   spriteFillOverride?: string;
   spriteStrokeOverride?: string;
   /** When true, skip applying clippedBy clip-path wrappers (caller already handles clipping). */
-  skipTrueClip?: boolean;
+  skipClipPaths?: boolean;
   /** When true, the fill gets no mask or clip-path wrappers; the caller wraps a run of fills sharing them. */
   skipFillWrappers?: boolean;
 };
@@ -70,7 +70,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   layer = "both",
   spriteFillOverride,
   spriteStrokeOverride,
-  skipTrueClip,
+  skipClipPaths,
   skipFillWrappers,
 }) => {
   if (g.noSprite) return null;
@@ -88,17 +88,17 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   const patternFillIds: Record<string, string> | undefined = g.patternFills
     ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
     : undefined;
-  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipTrueClip);
-  const clipMaskTargets = fillWrapTargets.maskTargets;
-  const outlineClipSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
-  const clipOutlineMaskTargets = outlineClipSources.map((clipId) => scopeId(`${clipId}_group_outline`));
-  const trueClipOutlineSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
-  const trueClipOutlineMaskTargets = g.maskOutline
-    ? trueClipOutlineSources.map((name) => scopeId(`${name}_trueclip_outline`))
+  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths);
+  const fillMaskTargets = fillWrapTargets.maskTargets;
+  const outlineMaskSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
+  const outlineMaskTargets = outlineMaskSources.map((name) => scopeId(`${name}_group_outline`));
+  const outlineClipSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
+  const outlineClipMaskTargets = g.maskOutline
+    ? outlineClipSources.map((name) => scopeId(`${name}_clip_mask_outline`))
     : [];
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
-  const hasClipMasks = clipMaskTargets.length > 0;
+  const hasFillMasks = fillMaskTargets.length > 0;
 
   const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
     if (!maskIds.length) {
@@ -170,7 +170,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         style={
           g.pointerEvents === false
             ? { pointerEvents: "none" as const }
-            : hasClipMasks && g.pointerEvents !== true
+            : hasFillMasks && g.pointerEvents !== true
               ? { ...(clickableStyle ?? {}) }
               : { pointerEvents: "visiblePainted", ...(clickableStyle ?? {}) }
         }
@@ -204,8 +204,8 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   );
 
   let outlineGroup: React.ReactNode = null;
-  if (g.maskOutline && (clipOutlineMaskTargets.length > 0 || trueClipOutlineMaskTargets.length > 0)) {
-    const outlineMaskTargets = [...clipOutlineMaskTargets, ...trueClipOutlineMaskTargets];
+  if (g.maskOutline && (outlineMaskTargets.length > 0 || outlineClipMaskTargets.length > 0)) {
+    const outlineWrapTargets = [...outlineMaskTargets, ...outlineClipMaskTargets];
     // The node's sprite mask is defined once, by the fill.
     const outlineNode = (
       <g
@@ -226,7 +226,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     ) : (
       outlineNode
     );
-    outlineGroup = wrapWithMasks(baseOutlineGroup, outlineMaskTargets, "outline");
+    outlineGroup = wrapWithMasks(baseOutlineGroup, outlineWrapTargets, "outline");
   }
 
   if (layer === "fill") {
@@ -253,7 +253,7 @@ const areEqual = (a: SvgGroupProps, b: SvgGroupProps) =>
   a.scopeId === b.scopeId &&
   a.spriteFillOverride === b.spriteFillOverride &&
   a.spriteStrokeOverride === b.spriteStrokeOverride &&
-  a.skipTrueClip === b.skipTrueClip &&
+  a.skipClipPaths === b.skipClipPaths &&
   a.skipFillWrappers === b.skipFillWrappers &&
   a.layer === b.layer;
 export default React.memo(SvgGroup, areEqual);

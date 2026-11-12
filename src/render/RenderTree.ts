@@ -48,7 +48,10 @@ export type RenderNode = {
   outlineClippedBy?: string[];
   clippingGroups?: string[];
   clipOutsets?: Record<string, number>;
+  /** This node's separate outline node, when its stroke is drawn as one (see `outlineOf`). */
   linkedOutline?: RenderNode;
+  /** On an outline node: the id of the node whose stroke it draws. */
+  outlineOf?: string;
   pattern?: Sprite;
   patternFills?: Record<number, Sprite>;
   /** Frame of the nearest `patternSpace` node (self included), scale removed; the pattern tiles in it. */
