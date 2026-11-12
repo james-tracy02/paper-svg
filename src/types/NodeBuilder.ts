@@ -41,7 +41,7 @@ interface BuilderState {
   clipOutsets: Record<string, number>;
   maskOutsets: Record<string, number>;
   clippedBy: string[];
-  outlineTrueClippedBy: string[];
+  outlineClippedBy: string[];
   inheritMaskingForChildren?: boolean;
   stopInheritedMasking?: boolean;
   inheritGroupsForChildren?: boolean;
@@ -88,7 +88,7 @@ export default class NodeBuilder {
         clipOutsets: {},
         maskOutsets: {},
         clippedBy: [],
-        outlineTrueClippedBy: [],
+        outlineClippedBy: [],
         zIndexMode: "relative",
         maskOutline: false,
       } satisfies BuilderState);
@@ -390,7 +390,7 @@ export default class NodeBuilder {
     if (!filtered.length) {
       return this;
     }
-    return this.with({ outlineTrueClippedBy: [...this._state.outlineTrueClippedBy, ...filtered] });
+    return this.with({ outlineClippedBy: [...this._state.outlineClippedBy, ...filtered] });
   }
 
   /**
@@ -592,15 +592,15 @@ export default class NodeBuilder {
       zIndex: s.zIndex,
       articulated: s.articulated,
       noSprite: s.noSprite,
-      clippedBy: s.maskedBy,
-      outlineClippedBy: s.outlineMaskedBy.length ? s.outlineMaskedBy : undefined,
-      clippingGroups: s.maskGroups,
+      maskedBy: s.maskedBy,
+      outlineMaskedBy: s.outlineMaskedBy.length ? s.outlineMaskedBy : undefined,
+      maskGroups: s.maskGroups,
       maskGroupModes: s.maskGroupModes,
       parentMaskedBy: s.parentMaskedBy,
-      trueClippedBy: s.clippedBy,
-      outlineTrueClippedBy: s.outlineTrueClippedBy.length ? s.outlineTrueClippedBy : undefined,
-      trueClippingGroups: s.clippingGroups,
-      trueClipOutsets: Object.keys(s.clipOutsets).length > 0 ? s.clipOutsets : undefined,
+      clippedBy: s.clippedBy,
+      outlineClippedBy: s.outlineClippedBy.length ? s.outlineClippedBy : undefined,
+      clippingGroups: s.clippingGroups,
+      clipOutsets: Object.keys(s.clipOutsets).length > 0 ? s.clipOutsets : undefined,
       maskOutsets: Object.keys(s.maskOutsets).length > 0 ? s.maskOutsets : undefined,
       inheritMaskingForChildren: s.inheritMaskingForChildren,
       stopInheritedMasking: s.stopInheritedMasking,

@@ -18,7 +18,7 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
 
   const transform = matrixTransformToSvg(g.matrix);
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
-  const isClipped = (g.clippedBy && g.clippedBy.length > 0) || (g.trueClippedBy && g.trueClippedBy.length > 0);
+  const isClipped = (g.maskedBy && g.maskedBy.length > 0) || (g.clippedBy && g.clippedBy.length > 0);
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const adjustedStrokeWidth = strokeWidth + (g.linkedOutline ? g.linkedOutline.sprite.strokeWidth ?? 0 : 0);
 

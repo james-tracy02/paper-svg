@@ -75,7 +75,7 @@ export { default as SvgGroupOutline } from "./render/GroupOutline";
 export { default as SvgSprite } from "./render/Sprite";
 export { default as SvgMask } from "./render/Mask";
 export { default as SpriteDefs } from "./render/SpriteDefs";
-export { default as TrueClipDefs, getTrueClippingGroups } from "./render/TrueClipDefs";
+export { default as TrueClipDefs, getClippingGroups } from "./render/TrueClipDefs";
 export { default as Pivots } from "./render/overlays/Pivots";
 export { default as GlowFilter } from "./render/filters/GlowFilter";
 export { default as TintFilter } from "./render/filters/TintFilter";

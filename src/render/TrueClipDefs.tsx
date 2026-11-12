@@ -66,15 +66,15 @@ export type TrueClipGroup = {
   groups: TrueClipMember[];
 };
 
-export const getTrueClippingGroups = (groups: RenderNode[]): Map<string, TrueClipGroup> => {
+export const getClippingGroups = (groups: RenderNode[]): Map<string, TrueClipGroup> => {
   const map = new Map<string, TrueClipGroup>();
   for (const g of groups) {
-    for (const groupName of g.trueClippingGroups ?? []) {
+    for (const groupName of g.clippingGroups ?? []) {
       if (!map.has(groupName)) {
         map.set(groupName, { id: groupName, groups: [] });
       }
       const entry = map.get(groupName)!;
-      entry.groups.push({ node: g, outset: g.trueClipOutsets?.[groupName] });
+      entry.groups.push({ node: g, outset: g.clipOutsets?.[groupName] });
     }
   }
   return map;

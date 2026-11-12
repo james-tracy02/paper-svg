@@ -47,7 +47,7 @@ export type SvgGroupProps = {
   layer?: "fill" | "maskOutline" | "both";
   spriteFillOverride?: string;
   spriteStrokeOverride?: string;
-  /** When true, skip applying trueClippedBy clip-path wrappers (caller already handles clipping). */
+  /** When true, skip applying clippedBy clip-path wrappers (caller already handles clipping). */
   skipTrueClip?: boolean;
   /** When true, the fill gets no mask or clip-path wrappers; the caller wraps a run of fills sharing them. */
   skipFillWrappers?: boolean;
@@ -90,9 +90,9 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     : undefined;
   const fillWrapTargets = getFillWrapTargets(g, scopeId, skipTrueClip);
   const clipMaskTargets = fillWrapTargets.maskTargets;
-  const outlineClipSources = g.outlineClippedBy ?? g.clippedBy ?? [];
+  const outlineClipSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
   const clipOutlineMaskTargets = outlineClipSources.map((clipId) => scopeId(`${clipId}_group_outline`));
-  const trueClipOutlineSources = g.outlineTrueClippedBy ?? g.outlineClippedBy ?? g.trueClippedBy ?? [];
+  const trueClipOutlineSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
   const trueClipOutlineMaskTargets = g.maskOutline
     ? trueClipOutlineSources.map((name) => scopeId(`${name}_trueclip_outline`))
     : [];

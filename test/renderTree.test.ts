@@ -102,17 +102,17 @@ describe("mask inheritance", () => {
     const stopped = new NodeBuilder("stopped").stopInheritedMasking().build();
     const nodes = byId(new NodeBuilder("root").addMaskedBy("m").inheritMaskingForChildren().addJoints(child, stopped).build());
 
-    expect(nodes.get("child")!.clippedBy).toEqual(["m"]);
-    expect(nodes.get("grandchild")!.clippedBy).toEqual(["m"]);
-    expect(nodes.get("stopped")!.clippedBy).toEqual([]);
+    expect(nodes.get("child")!.maskedBy).toEqual(["m"]);
+    expect(nodes.get("grandchild")!.maskedBy).toEqual(["m"]);
+    expect(nodes.get("stopped")!.maskedBy).toEqual([]);
   });
 
   it("adds descendants to their ancestor's groups", () => {
     const child = new NodeBuilder("child").build();
     const nodes = byId(new NodeBuilder("root").addMaskGroup("m").addClippingGroup("c").inheritGroupsForChildren().addJoints(child).build());
 
-    expect(nodes.get("child")!.clippingGroups).toEqual(["m"]);
-    expect(nodes.get("child")!.trueClippingGroups).toEqual(["c"]);
+    expect(nodes.get("child")!.maskGroups).toEqual(["m"]);
+    expect(nodes.get("child")!.clippingGroups).toEqual(["c"]);
   });
 });
 

@@ -14,10 +14,10 @@ export const getFillWrapTargets = (
   scopeId: (suffix: string) => string,
   skipTrueClip?: boolean,
 ): FillWrapTargets => ({
-  maskTargets: (g.clippedBy ?? []).map((clipId) => scopeId(`${clipId}_group${g.maskOutline ? "" : "_no_outline"}`)),
+  maskTargets: (g.maskedBy ?? []).map((clipId) => scopeId(`${clipId}_group${g.maskOutline ? "" : "_no_outline"}`)),
   clipTargets: skipTrueClip
     ? []
-    : [...new Set((g.trueClippedBy ?? []).map((name) => scopeId(`${name}_clippath`)))],
+    : [...new Set((g.clippedBy ?? []).map((name) => scopeId(`${name}_clippath`)))],
 });
 
 /** One wrapper around a fill: `clip:<clipPath id>` or `mask:<mask id>`. */

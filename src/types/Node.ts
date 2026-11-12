@@ -74,20 +74,20 @@ export type Node = Transform & {
   joints?: Node[];
   attachments?: Node[];
 
-  clippedBy?: string[];
-  outlineClippedBy?: string[];
-  clippingGroups?: string[];
+  maskedBy?: string[];
+  outlineMaskedBy?: string[];
+  maskGroups?: string[];
   maskGroupModes?: Record<string, "positive" | "negative">;
   maskOutsets?: Record<string, number>;
   parentMaskedBy?: string[];
 
-  trueClippedBy?: string[];
-  /** True-clip groups for this node's mask outline instead of `trueClippedBy`, so the fill and outline can be clipped differently. */
-  outlineTrueClippedBy?: string[];
-  trueClippingGroups?: string[];
-  trueClipOutsets?: Record<string, number>;
+  clippedBy?: string[];
+  /** True-clip groups for this node's mask outline instead of `clippedBy`, so the fill and outline can be clipped differently. */
+  outlineClippedBy?: string[];
+  clippingGroups?: string[];
+  clipOutsets?: Record<string, number>;
   /**
-   * When true, this node's own `maskedBy` (mask-group) and `clippedBy` (true clip-group)
+   * When true, this node's own `maskedBy` (mask groups) and `clippedBy` (clip groups)
    * values are automatically inherited by every descendant joint and attachment, in
    * addition to whatever they already have. Unlike `parentMaskedBy` (an explicit list you
    * supply yourself), this reuses the node's own values — set once here, no need to repeat
@@ -102,8 +102,8 @@ export type Node = Transform & {
    */
   stopInheritedMasking?: boolean;
   /**
-   * When true, this node's own `clippingGroups` (mask groups it defines/belongs to) and
-   * `trueClippingGroups` (true clip-path groups it defines/belongs to) — along with their
+   * When true, this node's own `maskGroups` (mask groups it defines/belongs to) and
+   * `clippingGroups` (true clip-path groups it defines/belongs to) — along with their
    * `maskGroupModes` — are automatically inherited by every descendant joint and
    * attachment, in addition to whatever groups they already declare. This makes every
    * descendant also contribute its own geometry to those same mask/clip groups, without
@@ -111,7 +111,7 @@ export type Node = Transform & {
    */
   inheritGroupsForChildren?: boolean;
   /**
-   * When true, this node ignores any `clippingGroups`/`trueClippingGroups`/`maskGroupModes`
+   * When true, this node ignores any `maskGroups`/`clippingGroups`/`maskGroupModes`
    * values that were being passed down from an ancestor's `inheritGroupsForChildren` — this
    * node (and its descendants, since the break happens at the propagation source) will not
    * receive them. Does not affect this node's own explicit group declarations.

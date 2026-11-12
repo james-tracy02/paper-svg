@@ -38,15 +38,15 @@ export type RenderNode = {
   jointParent?: RenderNode;
   mask?: Sprite;
   clip?: Sprite;
+  maskedBy?: string[];
+  outlineMaskedBy?: string[];
+  maskGroups?: string[];
+  maskGroupModes?: Record<string, "positive" | "negative">;
+  maskOutsets?: Record<string, number>;
   clippedBy?: string[];
   outlineClippedBy?: string[];
   clippingGroups?: string[];
-  maskGroupModes?: Record<string, "positive" | "negative">;
-  maskOutsets?: Record<string, number>;
-  trueClippedBy?: string[];
-  outlineTrueClippedBy?: string[];
-  trueClippingGroups?: string[];
-  trueClipOutsets?: Record<string, number>;
+  clipOutsets?: Record<string, number>;
   linkedOutline?: RenderNode;
   pattern?: Sprite;
   patternFills?: Record<number, Sprite>;
@@ -100,8 +100,8 @@ type RenderOptions = {
   opacity?: number;
   parentMaskedBy?: string[];
   parentClippedBy?: string[];
+  parentMaskGroups?: string[];
   parentClippingGroups?: string[];
-  parentTrueClippingGroups?: string[];
   parentMaskGroupModes?: Record<string, "positive" | "negative">;
   /** World matrices from the previous build pass, used to resolve `aimAt`/`pinTo` targets. */
   targetMatrices?: Map<string, MatrixTransform>;
@@ -374,10 +374,10 @@ const createRenderNode = (
   opts: RenderOptions,
   zIndex: number,
 ): RenderNode => {
-  const mergedClippedBy = [...(body.clippedBy ?? []), ...(body.parentMaskedBy ?? []), ...(opts.parentMaskedBy ?? [])];
-  const mergedTrueClippedBy = [...(body.trueClippedBy ?? []), ...(opts.parentClippedBy ?? [])];
+  const mergedMaskedBy = [...(body.maskedBy ?? []), ...(body.parentMaskedBy ?? []), ...(opts.parentMaskedBy ?? [])];
+  const mergedClippedBy = [...(body.clippedBy ?? []), ...(opts.parentClippedBy ?? [])];
+  const mergedMaskGroups = [...(body.maskGroups ?? []), ...(opts.parentMaskGroups ?? [])];
   const mergedClippingGroups = [...(body.clippingGroups ?? []), ...(opts.parentClippingGroups ?? [])];
-  const mergedTrueClippingGroups = [...(body.trueClippingGroups ?? []), ...(opts.parentTrueClippingGroups ?? [])];
   const mergedMaskGroupModes =
     opts.parentMaskGroupModes || body.maskGroupModes
       ? { ...(opts.parentMaskGroupModes ?? {}), ...(body.maskGroupModes ?? {}) }
@@ -396,14 +396,14 @@ const createRenderNode = (
     noSprite: body.noSprite,
     mask: body.mask,
     clip: body.clip,
+    maskedBy: mergedMaskedBy,
+    outlineMaskedBy: body.outlineMaskedBy,
+    maskGroups: mergedMaskGroups.length ? mergedMaskGroups : undefined,
+    maskGroupModes: mergedMaskGroupModes,
     clippedBy: mergedClippedBy,
     outlineClippedBy: body.outlineClippedBy,
     clippingGroups: mergedClippingGroups.length ? mergedClippingGroups : undefined,
-    maskGroupModes: mergedMaskGroupModes,
-    trueClippedBy: mergedTrueClippedBy,
-    outlineTrueClippedBy: body.outlineTrueClippedBy,
-    trueClippingGroups: mergedTrueClippingGroups.length ? mergedTrueClippingGroups : undefined,
-    trueClipOutsets: body.trueClipOutsets,
+    clipOutsets: body.clipOutsets,
     maskOutsets: body.maskOutsets,
     pattern: body.sprite.pattern,
     patternFills: body.sprite.patternFills,
@@ -437,39 +437,39 @@ const buildRenderTreeNode = (
   // happens before we compute what gets passed further down).
   const effectiveParentMaskedBy = body.stopInheritedMasking ? undefined : opts.parentMaskedBy;
   const effectiveParentClippedBy = body.stopInheritedMasking ? undefined : opts.parentClippedBy;
+  const effectiveParentMaskGroups = body.stopInheritedGroups ? undefined : opts.parentMaskGroups;
   const effectiveParentClippingGroups = body.stopInheritedGroups ? undefined : opts.parentClippingGroups;
-  const effectiveParentTrueClippingGroups = body.stopInheritedGroups ? undefined : opts.parentTrueClippingGroups;
   const effectiveParentMaskGroupModes = body.stopInheritedGroups ? undefined : opts.parentMaskGroupModes;
 
   // When `inheritMaskingForChildren` is set, this node's own maskedBy/clippedBy values are
   // folded into what gets passed down to every descendant joint/attachment, on top of
   // whatever was already being inherited from further up the tree.
-  const inheritedMaskedBy = body.inheritMaskingForChildren ? (body.clippedBy ?? []) : [];
-  const inheritedTrueClippedBy = body.inheritMaskingForChildren ? (body.trueClippedBy ?? []) : [];
+  const inheritedMaskedBy = body.inheritMaskingForChildren ? (body.maskedBy ?? []) : [];
+  const inheritedClippedBy = body.inheritMaskingForChildren ? (body.clippedBy ?? []) : [];
   const childParentMaskedBy = [...(effectiveParentMaskedBy ?? []), ...(body.parentMaskedBy ?? []), ...inheritedMaskedBy];
-  const childParentClippedBy = [...(effectiveParentClippedBy ?? []), ...inheritedTrueClippedBy];
+  const childParentClippedBy = [...(effectiveParentClippedBy ?? []), ...inheritedClippedBy];
   const nextParentMaskedBy = childParentMaskedBy.length ? childParentMaskedBy : undefined;
   const nextParentClippedBy = childParentClippedBy.length ? childParentClippedBy : undefined;
 
-  // When `inheritGroupsForChildren` is set, this node's own clippingGroups/trueClippingGroups
+  // When `inheritGroupsForChildren` is set, this node's own maskGroups/clippingGroups
   // (and their maskGroupModes) are folded into what gets passed down to every descendant
   // joint/attachment, on top of whatever was already being inherited from further up the
   // tree — making every descendant also contribute to those same mask/clip groups.
+  const inheritedMaskGroups = body.inheritGroupsForChildren ? (body.maskGroups ?? []) : [];
   const inheritedClippingGroups = body.inheritGroupsForChildren ? (body.clippingGroups ?? []) : [];
-  const inheritedTrueClippingGroups = body.inheritGroupsForChildren ? (body.trueClippingGroups ?? []) : [];
   const inheritedMaskGroupModes = body.inheritGroupsForChildren ? body.maskGroupModes : undefined;
-  const childParentClippingGroups = [...(effectiveParentClippingGroups ?? []), ...inheritedClippingGroups];
-  const childParentTrueClippingGroups = [
-    ...(effectiveParentTrueClippingGroups ?? []),
-    ...inheritedTrueClippingGroups,
+  const childParentMaskGroups = [...(effectiveParentMaskGroups ?? []), ...inheritedMaskGroups];
+  const childParentClippingGroups = [
+    ...(effectiveParentClippingGroups ?? []),
+    ...inheritedClippingGroups,
   ];
   const childParentMaskGroupModes =
     effectiveParentMaskGroupModes || inheritedMaskGroupModes
       ? { ...(effectiveParentMaskGroupModes ?? {}), ...(inheritedMaskGroupModes ?? {}) }
       : undefined;
-  const nextParentClippingGroups = childParentClippingGroups.length ? childParentClippingGroups : undefined;
-  const nextParentTrueClippingGroups = childParentTrueClippingGroups.length
-    ? childParentTrueClippingGroups
+  const nextParentMaskGroups = childParentMaskGroups.length ? childParentMaskGroups : undefined;
+  const nextParentClippingGroups = childParentClippingGroups.length
+    ? childParentClippingGroups
     : undefined;
 
   const myTransform = resolveNodeTransform(body, parentMatrix, opts.scaleFactor, opts.targetMatrices);
@@ -491,8 +491,8 @@ const buildRenderTreeNode = (
       ...opts,
       parentMaskedBy: effectiveParentMaskedBy,
       parentClippedBy: effectiveParentClippedBy,
+      parentMaskGroups: effectiveParentMaskGroups,
       parentClippingGroups: effectiveParentClippingGroups,
-      parentTrueClippingGroups: effectiveParentTrueClippingGroups,
       parentMaskGroupModes: effectiveParentMaskGroupModes,
       patternSpace,
     },
@@ -523,8 +523,8 @@ const buildRenderTreeNode = (
     opacity: currentNode.opacity, // pass opacity down to joints
     parentMaskedBy: nextParentMaskedBy,
     parentClippedBy: nextParentClippedBy,
+    parentMaskGroups: nextParentMaskGroups,
     parentClippingGroups: nextParentClippingGroups,
-    parentTrueClippingGroups: nextParentTrueClippingGroups,
     parentMaskGroupModes: childParentMaskGroupModes,
     targetMatrices: opts.targetMatrices,
     patternSpace,
@@ -540,8 +540,8 @@ const buildRenderTreeNode = (
     opacity: currentNode.opacity, // pass opacity down to attachments
     parentMaskedBy: nextParentMaskedBy,
     parentClippedBy: nextParentClippedBy,
+    parentMaskGroups: nextParentMaskGroups,
     parentClippingGroups: nextParentClippingGroups,
-    parentTrueClippingGroups: nextParentTrueClippingGroups,
     parentMaskGroupModes: childParentMaskGroupModes,
     targetMatrices: opts.targetMatrices,
     patternSpace,

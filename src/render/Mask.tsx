@@ -298,7 +298,7 @@ const SvgMask: React.FC<MaskProps> = ({
   // fill mask (`${name}_trueclip`, Body.tsx), since clip-path is ignored inside <mask> content but mask isn't.
   const wrapInTrueClips = (group: RenderNode, content: React.ReactElement) =>
     group.clipMaskContribution
-      ? [...new Set(group.trueClippedBy ?? [])]
+      ? [...new Set(group.clippedBy ?? [])]
           .filter((name) => name !== groupName)
           .reduce(
             (inner, name) => (
