@@ -14,6 +14,8 @@
  *   mirrorX(b)                           ->  scaleBy(b ? -1 : 1, 1)
  *   fixedRotation(...)                   ->  setFixedRotation(...)
  *   setShape(...)            (no-op)     ->  removed
+ *   addOutlineClippedBy(...)    (0.1: a mask)  ->  addOutlineMaskedBy(...)
+ *   addOutlineTrueClippedBy(...) (0.1: a clip) ->  addOutlineClippedBy(...)
  *
  *   SpriteBuilder: scalesWith/X/Y -> scaleBy, translatesWithX/Y -> moveBy, rotatesWith -> rotateBy.
  *   (SpriteBuilder.setScale already set, and still does.)
@@ -23,9 +25,10 @@
  *
  *   node scripts/migrate-0.3.mjs <tsconfig.json> [--write]
  *
- * Without --write it prints what it would change. Run it once, on 0.2 code: a second run would read
- * a 0.3 `NodeBuilder.setScale` (which sets) as the old one and turn it into `scaleBy`. Nested calls
- * are rewritten one level per run; it says so when that happens, and then only those need a rerun.
+ * Without --write it prints what it would change. Run it before upgrading, while paper-svg 0.1 is
+ * installed: the old calls are recognized by 0.1's types, and on 0.3 types `setScale` and
+ * `addOutlineClippedBy` already mean something else, so it refuses to run there. Nested calls are
+ * rewritten one level per run; it says so when that happens, and a rerun (still on 0.1) finishes them.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -44,6 +47,18 @@ if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.m
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, dirname(configPath));
 const program = ts.createProgram(parsed.fileNames, parsed.options);
 const checker = program.getTypeChecker();
+
+// Only 0.1's declarations have `addOutlineTrueClippedBy`.
+const typedBy01 = program
+  .getSourceFiles()
+  .some((file) => file.fileName.includes("/paper-svg/") && file.text.includes("addOutlineTrueClippedBy("));
+if (!typedBy01) {
+  console.error(
+    "paper-svg 0.1 isn't installed for this project. Run the migration before upgrading: on 0.3 types, " +
+      "`setScale` and `addOutlineClippedBy` already have their new meanings.",
+  );
+  process.exit(1);
+}
 
 /** An argument as source text, parenthesized when it could bind looser than `*` or `+`. */
 const operand = (arg, source) => {
@@ -81,6 +96,9 @@ const nodeRules = {
   fixedRotation: (a, s) => `setFixedRotation(${a.map((x) => x.getText(s)).join(", ")})`,
   // Never did anything on a NodeBuilder (a sprite's shape is set on its SpriteBuilder).
   setShape: () => null,
+  // 0.1's outline masking names. Matched on 0.1 types only: on 0.3, `addOutlineClippedBy` already clips.
+  addOutlineClippedBy: (a, s) => `addOutlineMaskedBy(${a.map((x) => x.getText(s)).join(", ")})`,
+  addOutlineTrueClippedBy: (a, s) => `addOutlineClippedBy(${a.map((x) => x.getText(s)).join(", ")})`,
 };
 const spriteRules = {
   scalesWith: nodeRules.scalesWith,
@@ -92,6 +110,7 @@ const spriteRules = {
 };
 
 const BUILDS = new Set(["build", "buildLeft", "buildRight", "buildSide"]);
+
 
 /**
  * "NodeBuilder" or "SpriteBuilder" when `expression` is one. A call removed in 0.3 types as `any`, so

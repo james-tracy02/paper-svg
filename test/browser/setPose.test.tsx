@@ -20,6 +20,20 @@ afterEach(() => {
   cleanups.splice(0).forEach((cleanup) => cleanup());
 });
 
+/**
+ * Markup with each element's attributes sorted: an attribute React adds to an existing element lands
+ * last, where a fresh render puts it in prop order, and that order means nothing.
+ */
+const canonicalMarkup = (svg: SVGSVGElement) => {
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  for (const element of [copy, ...copy.querySelectorAll("*")]) {
+    const attributes = [...element.attributes].map((a) => [a.name, a.value] as const).sort(([a], [b]) => a.localeCompare(b));
+    attributes.forEach(([name]) => element.removeAttribute(name));
+    attributes.forEach(([name, value]) => element.setAttribute(name, value));
+  }
+  return copy.outerHTML.replace(/></g, ">\n<");
+};
+
 /** Mounts a rig and returns its handle, its markup, a re-render, and how many times React committed it. */
 const mount = (props: RigProps) => {
   const host = document.createElement("div");
@@ -44,7 +58,7 @@ const mount = (props: RigProps) => {
   draw(props);
   return {
     setPose: (pose: Pose) => flushSync(() => handle.current!.setPose(pose)),
-    markup: () => host.querySelector("svg")!.outerHTML.replace(/></g, ">\n<"),
+    markup: () => canonicalMarkup(host.querySelector("svg")!),
     draw,
     commits: () => commits,
   };
@@ -144,5 +158,34 @@ describe("setPose", () => {
     rig.setPose({ rotations: { arm: 120 } });
     expect(rig.commits()).toBe(2);
     expect(rig.markup()).toEqual(renderedMarkup({ ...props, pose: { rotations: { arm: 120 } } }));
+  });
+
+  it("renders when a driver changes a mask, and writes while it keeps one", () => {
+    const rect = (fill: string) => new SpriteBuilder().setShape("rect").setFill(fill).setStrokeWidth(0).build();
+    const narrow = new SpriteBuilder().setShape("rect").setScale(1, 0.4).build();
+    const wide = new SpriteBuilder().setShape("rect").setScale(1, 1.2).build();
+    const body = new NodeBuilder("root")
+      .setSprite(rect("#888888"))
+      .addJoints(
+        new NodeBuilder("forearm")
+          .setSprite(rect("#aa3333"))
+          .addDriver((p) => {
+            const r = p.rotations?.forearm ?? 0;
+            return { mask: r < 15 ? null : r < 60 ? narrow : wide };
+          })
+          .build(),
+      )
+      .build();
+    const props: RigProps = { body, idPrefix: "masked" };
+    const rig = mount(props);
+    const check = (forearm: number, commits: number) => {
+      rig.setPose({ rotations: { forearm } });
+      expect(rig.commits(), `commits at ${forearm}`).toBe(commits);
+      expect(rig.markup()).toEqual(renderedMarkup({ ...props, pose: { rotations: { forearm } } }));
+    };
+    check(30, 2); // a mask appears
+    check(40, 2); // same mask: nothing to render
+    check(80, 3); // another mask
+    check(5, 4); // the mask goes
   });
 });

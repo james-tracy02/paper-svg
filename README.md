@@ -81,9 +81,16 @@ Use `setArticulated(true)` or `setArticulated(false)` to override the default fo
 | `skewBy(x, y)`                | Adds to the skew (`NodeBuilder`)                              |
 | `transformBy(t)`              | Applies a whole transform on top (`NodeBuilder`)              |
 
-Upgrading from 0.2, where `setJointPosition` added and `NodeBuilder.setScale` multiplied: run
-`node node_modules/paper-svg/scripts/migrate-0.3.mjs path/to/tsconfig.json --write` once. It rewrites
-each old call to the `By` method that does the same thing.
+Upgrading from 0.1, where `setJointPosition` added and `NodeBuilder.setScale` multiplied: before you
+upgrade, with 0.1 still installed, run the codemod that ships with 0.3 against your project:
+
+```sh
+npm pack paper-svg@0.3.0 && tar xzf paper-svg-0.3.0.tgz
+node package/scripts/migrate-0.3.mjs tsconfig.json --write
+```
+
+It rewrites each old call to the method that does the same thing (including 0.1's
+`addOutlineClippedBy`, which was a mask and is now `addOutlineMaskedBy`). Then upgrade to 0.3.
 
 ### Left and right sides
 

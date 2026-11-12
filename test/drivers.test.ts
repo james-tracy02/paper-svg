@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getRenderNodes, NodeBuilder, SpriteBuilder, type CustomSprite, type Node, type Pose, type RenderNode } from "../src";
-import { createRig, solvePose } from "../src/render/pose";
+import { bakePose, createRig, solvePose } from "../src/render/pose";
 import { flattenRenderTree, buildRenderTreeFromPose } from "../src/render/RenderTree";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
 
@@ -180,6 +180,83 @@ describe("drivers", () => {
       expect(planIds({ rotations: { elbow: 120 } })).toEqual(planIds({ rotations: { elbow: 30 } }));
       expect(planIds({})).toContain('"cuff_bent"');
     });
+  });
+
+  describe("masks", () => {
+    const mask = (y: number) => new SpriteBuilder().setShape("rect").setScale(2, y).setOffset(3, -4).build();
+    const narrow = mask(0.5);
+    const wide = mask(1.5);
+    // Stands in for project-k's forearm mask: shaped by the forearm's angle in a range, none outside it.
+    const forArm = (r: number) => (r < 15 ? null : r < 60 ? narrow : wide);
+    const forearm = (configure: (b: NodeBuilder) => NodeBuilder, side: "left" | "right") =>
+      part("torso")
+        .addJoints(configure(part("forearm").setOutlineZIndex(5).moveBy(10, 0)).buildSide(side))
+        .build();
+    const masks = (nodes: RenderNode[]) => Object.fromEntries(nodes.map((n) => [n.id, n.mask]));
+
+    it.each(["right", "left"] as const)("replace the node's own, as setMask would (%s side)", (side) => {
+      const driven = forearm((b) => b.setMask(narrow).addDriver((p) => ({ mask: forArm(p.rotations?.angle ?? 0) })), side);
+      for (const angle of [0, 30, 90]) {
+        const baked = forearm((b) => b.setMask(forArm(angle) ?? undefined), side);
+        expect(masks(getRenderNodes(driven, { rotations: { angle } }))).toEqual(masks(getRenderNodes(baked)));
+      }
+    });
+
+    it("keep their identity across poses that leave them alike, outline copies included", () => {
+      const driven = forearm((b) => b.addDriver((p) => ({ mask: forArm(p.rotations?.angle ?? 0) })), "left");
+      const rig = createRig(driven);
+      const at = (angle: number) => {
+        const nodes = flattenRenderTree(buildRenderTreeFromPose(rig, solvePose(rig, { rotations: { angle } })));
+        return [nodes.find((n) => n.id === "forearm_left")!.mask, nodes.find((n) => n.id === "forearm_left_outline")!.mask];
+      };
+      const [fill, outline] = at(20);
+      expect(fill).toBeDefined();
+      expect(at(40)).toEqual([fill, outline]);
+      expect(at(40)[0]).toBe(fill);
+      expect(at(40)[1]).toBe(outline);
+      expect(outline!.scale.y).toBeCloseTo(fill!.scale.y * 0.999);
+      expect(at(5)).toEqual([undefined, undefined]);
+    });
+  });
+
+  it("bake into a plain tree that draws what the pose draws", () => {
+    const narrow = new SpriteBuilder().setShape("rect").setScale(2, 0.5).build();
+    const arm = (side: "left" | "right") =>
+      part("arm")
+        .moveBy(10, 0)
+        .setOutlineZIndex(3)
+        .addDriver((p) => ({ zIndex: (p.rotations?.[`arm_${side}`] ?? 0) > 90 ? 50 : 0, outlineZIndex: 2 }))
+        .addJoints(
+          part("forearm")
+            .addDriver((p) => ({ mask: (p.rotations?.[`arm_${side}`] ?? 0) > 30 ? narrow : null, rotate: 5, scaleY: 1.2 }))
+            .addJoints(part("hand").build())
+            .build(),
+        )
+        .addAttachments(
+          part("pad")
+            .addDriver((p) => ({ visible: (p.rotations?.[`arm_${side}`] ?? 0) < 60 }))
+            .addJoints(part("strap").build())
+            .build(),
+          part("hem")
+            .setSprite(new SpriteBuilder().setPath("M 0 0 L 1 1 Z").build())
+            .addDriver((p) => ({ path: `M 0 0 L ${p.rotations?.[`arm_${side}`] ?? 0} 1 Z`, skewX: 4 }))
+            .build(),
+        )
+        .buildSide(side);
+    const body = part("torso").addJoints(arm("right"), arm("left")).build();
+    const drawn = (nodes: RenderNode[]) =>
+      Object.fromEntries(
+        nodes
+          .filter((n) => !n.noSprite && !n.hidden)
+          .map((n) => [n.id, { matrix: n.matrix, zIndex: n.zIndex, mask: n.mask, path: n.sprite.dynamicPath }]),
+      );
+    for (const pose of [{}, { rotations: { arm_right: 120, arm_left: -40 } }, { rotations: { arm_right: 45, arm_left: 100 } }]) {
+      const posed = getRenderNodes(body, pose);
+      const baked = bakePose(body, pose);
+      expect(JSON.stringify(baked)).not.toContain("evaluate");
+      expect(drawn(getRenderNodes(baked))).toEqual(drawn(posed));
+      expect(Object.keys(drawn(posed)).length).toBeGreaterThan(5);
+    }
   });
 
   it("leave a tree without drivers exactly as it was", () => {

@@ -9,7 +9,7 @@
 import type { Node } from "../types/Node";
 import type { Pose } from "../types/Pose";
 import type { Vector2 } from "../types/primitives";
-import type { CustomSprite } from "../types/Sprite";
+import type { CustomSprite, Sprite } from "../types/Sprite";
 import type { MatrixTransform } from "../types/Transform";
 import { getGradientFrame } from "./gradient";
 import {
@@ -61,6 +61,8 @@ export type PoseSolution = {
   dynamicPaths: (string | undefined)[];
   /** The custom sprite a driver swaps in for an entry's own. */
   customSprites: (CustomSprite | undefined)[];
+  /** The mask a driver sets in place of an entry's own (`null`: none); undefined where no driver does. */
+  masks: (Sprite | null | undefined)[];
   /** Entries a driver hides (`visible: false`), directly or through an ancestor. */
   hidden: boolean[];
   /** What drivers add to each entry's z-index, and to its outline's. */
@@ -80,6 +82,22 @@ type PosedEntry = {
   outlineZOffset: number;
   path?: string;
   customSprite?: CustomSprite;
+  mask?: Sprite | null;
+};
+
+/** Left-side copies of driver masks, mirrored as `buildLeft` mirrors a node's own, kept so a mask keeps its identity. */
+const mirroredMasks = new WeakMap<Sprite, Sprite>();
+const mirrorMask = (mask: Sprite): Sprite => {
+  let mirrored = mirroredMasks.get(mask);
+  if (!mirrored) {
+    mirrored = {
+      ...mask,
+      translate: { x: mask.translate.x * -1, y: mask.translate.y },
+      scale: { x: mask.scale.x * -1, y: mask.scale.y },
+    };
+    mirroredMasks.set(mask, mirrored);
+  }
+  return mirrored;
 };
 
 const UNIT_SCALE: Vector2 = { x: 1, y: 1 };
@@ -109,6 +127,7 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
   let outlineZOffset = 0;
   let path: string | undefined;
   let customSprite: CustomSprite | undefined;
+  let mask: Sprite | null | undefined;
   for (const driver of node.drivers ?? []) {
     const out = driver.evaluate(pose);
     const m = driver.mirror;
@@ -124,6 +143,7 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
     outlineZOffset += out.outlineZIndex ?? 0;
     path = out.path ?? path;
     customSprite = out.customSprite ?? customSprite;
+    if (out.mask !== undefined) mask = out.mask && m < 0 ? mirrorMask(out.mask) : out.mask;
   }
   const skew = rest.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
   const sprite =
@@ -137,7 +157,43 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
     outlineZOffset,
     path,
     customSprite,
+    mask,
   };
+};
+
+/**
+ * `body` with `pose` and its drivers folded in: a plain tree, without drivers, that draws what `body`
+ * draws in `pose`. For saving a posed body as data (drivers are functions); render with a pose instead.
+ * A node a driver hides becomes `noSprite`, with everything under it.
+ */
+export const bakePose = (body: Node, pose: Pose = {}): Node => {
+  const bake = (node: Node, parentHidden: boolean): Node => {
+    const posed = applyPose(node, pose);
+    const hidden = parentHidden || posed.hidden;
+    const { drivers: _drivers, ...baked } = posed.node;
+    void _drivers;
+    const paint =
+      hidden || posed.mask !== undefined
+        ? {
+            ...baked.paint,
+            ...(hidden ? { noSprite: true } : {}),
+            ...(posed.mask !== undefined ? { mask: posed.mask ?? undefined } : {}),
+          }
+        : baked.paint;
+    const outline =
+      posed.outlineZOffset && baked.outline?.zIndex !== undefined
+        ? { ...baked.outline, zIndex: baked.outline.zIndex + posed.outlineZOffset }
+        : baked.outline;
+    return {
+      ...baked,
+      zIndex: posed.zOffset ? (node.zIndex ?? 0) + posed.zOffset : node.zIndex,
+      paint,
+      outline,
+      joints: node.joints?.map((child) => bake(child, hidden)),
+      attachments: node.attachments?.map((child) => bake(child, hidden)),
+    };
+  };
+  return bake(body, false);
 };
 
 /** Flattens `root` into a rig. Build it once per structure; pose it with `solvePose`. */
@@ -183,6 +239,7 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   const zOffsets: number[] = new Array(count);
   const outlineZOffsets: number[] = new Array(count);
   const customSprites: (CustomSprite | undefined)[] = new Array(count);
+  const masks: (Sprite | null | undefined)[] = new Array(count);
   const zKeyParts: string[] = [];
   for (let i = 0; i < count; i += 1) {
     const { node, parent } = rig.entries[i];
@@ -192,6 +249,7 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     zOffsets[i] = posed.zOffset;
     outlineZOffsets[i] = posed.outlineZOffset;
     customSprites[i] = posed.customSprite;
+    masks[i] = posed.mask;
     if (posed.path !== undefined) dynamicPaths[i] = posed.path;
     if (posed.zOffset || posed.outlineZOffset) zKeyParts.push(`${i}:${posed.zOffset}:${posed.outlineZOffset}`);
   }
@@ -296,6 +354,7 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     gradientTransforms,
     dynamicPaths,
     customSprites,
+    masks,
     hidden,
     zOffsets,
     outlineZOffsets,

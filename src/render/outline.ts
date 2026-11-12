@@ -1,3 +1,4 @@
+import type { Sprite } from "../types/Sprite";
 import type { RenderNode } from "./RenderTree";
 
 /**
@@ -6,6 +7,19 @@ import type { RenderNode } from "./RenderTree";
  * the outline's copy pulls its cut just inside the fill's.
  */
 const OUTLINE_MASK_SCALE = 0.999;
+
+const outlineMasks = new WeakMap<Sprite, Sprite>();
+
+/** The outline's copy of its owner's mask; the same object for the same mask, so poses keep it. */
+export const outlineMaskOf = (mask: Sprite | undefined): Sprite | undefined => {
+  if (!mask) return undefined;
+  let copy = outlineMasks.get(mask);
+  if (!copy) {
+    copy = { ...mask, scale: { x: mask.scale.x * OUTLINE_MASK_SCALE, y: mask.scale.y * OUTLINE_MASK_SCALE } };
+    outlineMasks.set(mask, copy);
+  }
+  return copy;
+};
 
 /**
  * Splits `owner`'s stroke into a separate outline node drawn at `zIndex`, for `setOutlineZIndex`
@@ -32,12 +46,7 @@ export const createOutlineNode = (owner: RenderNode, zIndex: number): RenderNode
       strokeWidth: strokeWidth ? strokeWidth * (zIndex < owner.zIndex ? 2 : 1) : 0,
     },
     articulated: false,
-    mask: owner.mask
-      ? {
-          ...owner.mask,
-          scale: { x: owner.mask.scale.x * OUTLINE_MASK_SCALE, y: owner.mask.scale.y * OUTLINE_MASK_SCALE },
-        }
-      : undefined,
+    mask: outlineMaskOf(owner.mask),
   };
   owner.linkedOutline = outline;
   owner.sprite.strokeWidth = 0;

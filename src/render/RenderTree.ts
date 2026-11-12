@@ -145,7 +145,7 @@ const createRenderNode = (
     draggable: opts.draggable,
     noSprite: paint.noSprite,
     hidden: solution.hidden[index] || undefined,
-    mask: paint.mask,
+    mask: solution.masks[index] === undefined ? paint.mask : (solution.masks[index] ?? undefined),
     clip: paint.clip,
     maskedBy: mergedMaskedBy,
     outlineMaskedBy: body.outlineMaskedBy,
