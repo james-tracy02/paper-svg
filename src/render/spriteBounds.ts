@@ -166,7 +166,7 @@ export const getMaskRegion = (members: readonly RenderNodeLike[], groupName: str
     if (member.noSprite) continue;
     const bounds = getSpriteMaskBounds(member.sprite, member.matrix);
     if (!bounds) return null;
-    region = union(region, expandBounds(bounds, Math.max(0, membership(member, groupName, "mask")?.outset ?? 0)));
+    region = union(region, expandBounds(bounds, Math.max(0, membership(member, groupName)?.outset ?? 0)));
   }
   return region && expandBounds(region, MASK_PADDING);
 };

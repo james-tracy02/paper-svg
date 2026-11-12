@@ -1,44 +1,40 @@
 import { createContext } from "react";
 import type React from "react";
+import type { RegionForms } from "./layerPlan";
 import type { RenderNode } from "./RenderTree";
 import { fillCuts } from "./regions";
 
 /**
- * Mask groups the layer plan also draws as a <clipPath> (`${name}_group_clippath`), as they only cut hard edges,
- * with the ids of the nodes cut by that instead of the <mask> (see `planDefs`). Provided by RigLayers, so nodes
- * that wrap their own fill agree with the plan.
+ * How the layer plan draws each region's shapes (see `planDefs`). Provided by RigLayers, so nodes that wrap
+ * their own fill agree with the plan.
  */
-export const MaskClipsContext = createContext<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+export const RegionFormsContext = createContext<RegionForms>(new Map());
 
 export type FillWrapTargets = {
-  /** Soft-mask ids, outermost first. */
+  /** Mask ids, outermost first. */
   maskTargets: string[];
-  /** Clip group clipPath ids, outermost first, de-duped. */
+  /** Clip-path ids, outermost first, de-duped. */
   clipTargets: string[];
 };
 
-/** Mask and clip-path ids a node's fill is wrapped in (see wrapFill). */
-export const getFillWrapTargets = (
-  g: RenderNode,
-  scopeId: (suffix: string) => string,
-  skipClipPaths?: boolean,
-  maskClips: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
-): FillWrapTargets => {
-  const maskedBy = fillCuts(g, "mask");
-  const asClip = (name: string) => !g.traceOutline && Boolean(maskClips.get(name)?.has(g.id));
-  return {
-    maskTargets: maskedBy
-      .filter((name) => !asClip(name))
-      .map((name) => scopeId(`${name}_group${g.traceOutline ? "" : "_no_outline"}`)),
-    clipTargets: skipClipPaths
-      ? []
-      : [
-          ...new Set([
-            ...fillCuts(g, "clip").map((name) => scopeId(`${name}_clippath`)),
-            ...maskedBy.filter(asClip).map((name) => scopeId(`${name}_group_clippath`)),
-          ]),
-        ],
-  };
+/**
+ * Mask and clip-path ids a node's fill is wrapped in (see wrapFill): for each region cutting it, the full shape
+ * when the node traces its outline (`setMaskOutline`), else the inset shape, as a clip-path where the plan lets
+ * the node take one.
+ */
+export const getFillWrapTargets = (g: RenderNode, skipClipPaths: boolean | undefined, forms: RegionForms): FillWrapTargets => {
+  const maskTargets: string[] = [];
+  const clipTargets = new Set<string>();
+  for (const name of fillCuts(g)) {
+    const form = forms.get(name)?.[g.traceOutline ? "full" : "inset"];
+    if (!form) continue;
+    if (form.clipId && (!form.clipUsers || form.clipUsers.has(g.id))) {
+      if (!skipClipPaths) clipTargets.add(form.clipId);
+    } else if (form.maskId) {
+      maskTargets.push(form.maskId);
+    }
+  }
+  return { maskTargets, clipTargets: [...clipTargets] };
 };
 
 /** One wrapper around a fill: `clip:<clipPath id>` or `mask:<mask id>`. */

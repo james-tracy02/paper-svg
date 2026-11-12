@@ -5,9 +5,9 @@ import type { RenderNode } from "./RenderTree";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
 import type { Sprite } from "../types/Sprite";
-import { getFillWrapTargets, MaskClipsContext, wrapFill } from "./fillWrappers";
+import { getFillWrapTargets, RegionFormsContext, wrapFill } from "./fillWrappers";
 import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
-import { fillCuts, outlineCuts } from "./regions";
+import { isCut, outlineCuts } from "./regions";
 
 /** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
 const renderClipShape = (sprite: Sprite, spriteTransform: string): React.ReactNode => {
@@ -83,7 +83,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   skipFillWrappers,
 }) => {
   const bindings = useContext(PoseBindingsContext);
-  const maskClips = useContext(MaskClipsContext);
+  const forms = useContext(RegionFormsContext);
   if (g.noSprite || g.hidden) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
@@ -103,17 +103,15 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   const patternFillIds: Record<string, string> | undefined = g.patternFills
     ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
     : undefined;
-  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths, maskClips);
-  const outlineMaskSources = outlineCuts(g, "mask");
-  const outlineMaskTargets = outlineMaskSources.map((name) => scopeId(`${name}_group_outline`));
-  const outlineClipSources = outlineCuts(g, "clip");
-  const outlineClipMaskTargets = g.traceOutline
-    ? outlineClipSources.map((name) => scopeId(`${name}_clip_mask_outline`))
+  const fillWrapTargets = getFillWrapTargets(g, skipClipPaths, forms);
+  // A traced outline is cut by the outlines of the regions it traces.
+  const outlineWrapTargets = g.traceOutline
+    ? outlineCuts(g).flatMap((name) => forms.get(name)?.outlineMaskId ?? [])
     : [];
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
-  // Masked nodes keep pointer events off, also where their mask group is drawn as a clip-path.
-  const hasFillMasks = fillCuts(g, "mask").length > 0;
+  // Cut nodes keep pointer events off, whether a region cuts them with a mask or a clip-path.
+  const hasFillMasks = isCut(g);
 
   const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
     if (!maskIds.length) {
@@ -223,8 +221,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   );
 
   let outlineGroup: React.ReactNode = null;
-  if (g.traceOutline && (outlineMaskTargets.length > 0 || outlineClipMaskTargets.length > 0)) {
-    const outlineWrapTargets = [...outlineMaskTargets, ...outlineClipMaskTargets];
+  if (outlineWrapTargets.length > 0) {
     // The node's sprite mask is defined once, by the fill.
     const outlineNode = (
       <g

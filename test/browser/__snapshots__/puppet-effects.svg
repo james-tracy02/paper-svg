@@ -27,7 +27,7 @@
 </path>
 </defs>
 <defs>
-<clipPath id="puppet_torso_shape_clippath" clipPathUnits="userSpaceOnUse">
+<clipPath id="puppet_torso_shape_region" clipPathUnits="userSpaceOnUse">
 <ellipse rx="5" ry="5" transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)">
 </ellipse>
 </clipPath>
@@ -134,7 +134,7 @@
 <ellipse transform="matrix(-2, 0, 0, 2.2, 0, 11)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>
 </g>
-<g clip-path="url(#puppet_torso_shape_clippath)">
+<g clip-path="url(#puppet_torso_shape_region)">
 <g transform="matrix(0.8192, 0.5736, -0.5736, 0.8192, 0, 0)" data-render-id="sash" style="pointer-events: none;">
 <rect transform="matrix(13, 0, 0, 1.7, 0, 0)" fill="#ef4444" x="-5" y="-5" width="10" height="10" stroke="#000000ff" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
 </rect>

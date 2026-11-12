@@ -38,7 +38,7 @@ describe("Rig", () => {
     expect(svg.indexOf(drawn("bottom"))).toBeLessThan(svg.indexOf(drawn("top")));
   });
 
-  it("generates masks and clips under idPrefix and applies them", () => {
+  it("generates region masks and clips under idPrefix and applies them", () => {
     const body = part("root")
       // An outset keeps it a <mask> rather than a clip-path.
       .addMaskGroup("soft")
@@ -48,10 +48,10 @@ describe("Rig", () => {
       .build();
     const svg = render({ body, idPrefix: "demo" });
 
-    expect(svg).toContain('id="demo_soft_group');
-    expect(svg).toContain('mask="url(#demo_soft_group');
-    expect(svg).toContain('id="demo_hard_clippath"');
-    expect(svg).toContain("url(#demo_hard_clippath)");
+    expect(svg).toContain('<mask id="demo_soft_region"');
+    expect(svg).toContain('mask="url(#demo_soft_region)"');
+    expect(svg).toContain('<clipPath id="demo_hard_region"');
+    expect(svg).toContain('clip-path="url(#demo_hard_region)"');
   });
 
   it("draws a hard sprite mask as a <clipPath> and a soft one as a <mask>", () => {
@@ -74,7 +74,7 @@ describe("Rig", () => {
     expect(svg).toMatch(/clip-path="url\(#demo_cut_mask\)"[^>]*><g clip-path="url\(#demo_cut_clip\)">/);
   });
 
-  it("cuts a clip contribution to a mask group by the clip group's <clipPath>, with no mask for it", () => {
+  it("cuts a member adding only where it's cut by its cutting region's <clipPath>, inside the other region's mask", () => {
     const body = part("root")
       .addClippingGroup("hard")
       .addJoints(
@@ -84,8 +84,8 @@ describe("Rig", () => {
       .build();
     const svg = render({ body, idPrefix: "demo" });
 
-    expect(svg).toMatch(/<mask id="demo_soft_group_no_outline"[^]*?clip-path="url\(#demo_hard_clippath\)"[^]*?<\/mask>/);
-    expect(svg).not.toContain("_clip_mask");
+    expect(svg).toMatch(/<mask id="demo_soft_region"[^]*?clip-path="url\(#demo_hard_region\)"[^]*?<\/mask>/);
+    expect(svg).not.toContain('<mask id="demo_hard');
   });
 
   it("draws a clip member's path as is when its outset is 0, the addClippingGroup default", () => {
@@ -95,7 +95,7 @@ describe("Rig", () => {
       .addClippingGroup("hard")
       .addJoints(part("clipped").addClippedBy("hard").build())
       .build();
-    const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_clippath"[^>]*>(.*?)<\/clipPath>/)?.[1];
+    const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_region"[^>]*>(.*?)<\/clipPath>/)?.[1];
 
     expect(clipPath).toContain(`d="${d}"`);
   });
@@ -152,7 +152,7 @@ describe("outlines", () => {
     expect(svg).not.toContain("part_outline_pattern");
   });
 
-  it("hoists a clip group owner's outline above its dependents, shrinking its sprite mask", () => {
+  it("hoists a clip group owner's outline above its dependents, cut by the owner's own sprite mask", () => {
     const body = new NodeBuilder("owner")
       .setSprite(stroked("#00ff00").build())
       .setMask(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
@@ -163,6 +163,6 @@ describe("outlines", () => {
 
     expect(svg.indexOf(drawn("owner_outline"))).toBeGreaterThan(svg.indexOf(drawn("dependent")));
     const outlineMask = svg.slice(svg.indexOf('id="rig_owner_outline_mask"'));
-    expect(outlineMask.slice(0, outlineMask.indexOf("</mask>"))).toContain("1.998");
+    expect(outlineMask.slice(0, outlineMask.indexOf("</clipPath>"))).toContain("matrix(2, 0, 0, 2, 0, 0)");
   });
 });

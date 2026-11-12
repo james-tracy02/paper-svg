@@ -7,12 +7,6 @@
 <path id="sym_72nf9d" d="M50 30L56 45 72 45 59 55 64 71 50 61 36 71 41 55 28 45 44 45Z" vector-effect="non-scaling-stroke">
 </path>
 </defs>
-<defs>
-<clipPath id="puppet_torso_shape_clippath" clipPathUnits="userSpaceOnUse">
-<ellipse rx="5" ry="5" transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)">
-</ellipse>
-</clipPath>
-</defs>
 <g transform="matrix(0.9397, 0.342, -0.342, 0.9397, -36, -32)" data-render-id="arm_left" data-rotate-chain="arm_left" style="pointer-events: visiblepainted;">
 <ellipse transform="matrix(-2, 0, 0, 7, 0, 35)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>

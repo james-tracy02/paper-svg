@@ -78,7 +78,7 @@ export { default as SvgSprite } from "./render/Sprite";
 export { default as SvgMask } from "./render/Mask";
 export { default as SpriteDefs } from "./render/SpriteDefs";
 export { default as ClipPathDefs } from "./render/ClipPathDefs";
-export { getClippingGroups } from "./render/layerPlan";
+export { getRegions } from "./render/layerPlan";
 export { default as Pivots } from "./render/overlays/Pivots";
 export { default as GlowFilter } from "./render/filters/GlowFilter";
 export { default as TintFilter } from "./render/filters/TintFilter";

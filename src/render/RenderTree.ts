@@ -48,7 +48,6 @@ export type RenderNode = {
   blendMode?: CSSProperties["mixBlendMode"];
   /** Draws this node's outline as its own layer, tracing the outlines of the regions it's cut by (`setMaskOutline`). */
   traceOutline?: boolean;
-  disableOutlineHoisting?: boolean;
   opacity?: number;
 
   // debug
@@ -154,7 +153,6 @@ const createRenderNode = (
     renderGroup: paint.renderGroup,
     blendMode: paint.blendMode,
     traceOutline,
-    disableOutlineHoisting: body.outline?.disableHoisting,
     opacity: paint.opacity ?? opts.opacity,
     pointerEvents: body.interaction?.pointerEvents,
     pointerEventsTarget: body.interaction?.target,

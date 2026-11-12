@@ -16,7 +16,6 @@ import type { Vector2 } from "../types/primitives";
 import { createRig, solvePose, type PoseSolution, type Rig } from "./pose";
 import { buildRenderTreeFromPose, flattenRenderTree, type RenderNode } from "./RenderTree";
 import { resolveVisibleNodes } from "./layerPlan";
-import { outlineMaskOf } from "./outline";
 
 export type RigLayout = {
   readonly rig: Rig;
@@ -106,7 +105,7 @@ export const placementOf = (node: RenderNode, index: number, rig: Rig, solution:
     // Only nodes with a pattern take a pattern space; outlines copy their owner's.
     patternSpace: node.patternSpace === undefined ? undefined : solution.patternSpaces[index],
     hidden: solution.hidden[index] || undefined,
-    mask: node.outlineOf === undefined ? maskOf(index, rig, solution) : outlineMaskOf(maskOf(index, rig, solution)),
+    mask: maskOf(index, rig, solution),
     gradientTransform: solution.gradientTransforms[index] ?? own.gradientTransform,
     dynamicPath: solution.dynamicPaths[index] ?? own.dynamicPath,
     customSprite: solution.customSprites[index] ?? own.customSprite,

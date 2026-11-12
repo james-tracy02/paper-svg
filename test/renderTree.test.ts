@@ -103,8 +103,8 @@ describe("mask inheritance", () => {
     const stopped = new NodeBuilder("stopped").stopInheritedMasking().build();
     const nodes = byId(new NodeBuilder("root").addMaskedBy("m").inheritMaskingForChildren().addJoints(child, stopped).build());
 
-    expect(fillCuts(nodes.get("child")!, "mask")).toEqual(["m"]);
-    expect(fillCuts(nodes.get("grandchild")!, "mask")).toEqual(["m"]);
+    expect(fillCuts(nodes.get("child")!)).toEqual(["m"]);
+    expect(fillCuts(nodes.get("grandchild")!)).toEqual(["m"]);
     expect(nodes.get("stopped")!.cuts).toBeUndefined();
   });
 
@@ -113,8 +113,8 @@ describe("mask inheritance", () => {
     const nodes = byId(new NodeBuilder("root").addMaskGroup("m").addClippingGroup("c").inheritGroupsForChildren().addJoints(child).build());
 
     expect(nodes.get("child")!.regions).toEqual([
-      { region: "m", kind: "mask", subtract: false, outset: undefined, onlyWhereCut: undefined },
-      { region: "c", kind: "clip", outset: undefined },
+      { region: "m", subtract: undefined, outset: undefined, onlyWhereCut: undefined, inset: true },
+      { region: "c", outset: undefined, inset: undefined },
     ]);
   });
 });

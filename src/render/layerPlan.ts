@@ -13,31 +13,16 @@ import { fillCuts, isCut, memberOf, membership, outlineCuts } from "./regions";
 type ScopeId = (suffix: string) => string;
 type GetRenderGroupOptions = (id: string) => RenderGroupOptions | undefined;
 
-export type MaskGroup = { id: string; groups: RenderNode[] };
+/** A region and the nodes whose shapes make it, in paint order (a node joining twice is listed twice). */
+export type Region = { name: string; members: RenderNode[] };
 
-/** `paintedAsMask`: a mask group member, drawn whole as a mask paints it (any fill, every path). */
-export type ClipGroupMember = { node: RenderNode; outset?: number; paintedAsMask?: boolean };
-export type ClipGroup = { id: string; groups: ClipGroupMember[] };
-
-/** Soft-mask groups by name, with the nodes that draw into each (`addMaskGroup`). */
-export const getMaskGroups = (nodes: RenderNode[]): Map<string, MaskGroup> => {
-  const map = new Map<string, MaskGroup>();
+/** Every region by name, with its members (`addMaskGroup`, `addClippingGroup`). */
+export const getRegions = (nodes: RenderNode[]): Map<string, Region> => {
+  const map = new Map<string, Region>();
   for (const node of nodes) {
-    for (const name of memberOf(node, "mask")) {
-      if (!map.has(name)) map.set(name, { id: name, groups: [] });
-      map.get(name)!.groups.push(node);
-    }
-  }
-  return map;
-};
-
-/** Hard-clip groups by name, with the nodes that draw into each and their outsets (`addClippingGroup`). */
-export const getClippingGroups = (nodes: RenderNode[]): Map<string, ClipGroup> => {
-  const map = new Map<string, ClipGroup>();
-  for (const node of nodes) {
-    for (const name of memberOf(node, "clip")) {
-      if (!map.has(name)) map.set(name, { id: name, groups: [] });
-      map.get(name)!.groups.push({ node, outset: membership(node, name, "clip")?.outset });
+    for (const name of memberOf(node)) {
+      if (!map.has(name)) map.set(name, { name, members: [] });
+      map.get(name)!.members.push(node);
     }
   }
   return map;
@@ -46,6 +31,11 @@ export const getClippingGroups = (nodes: RenderNode[]): Map<string, ClipGroup> =
 /** A node made to draw another node's stroke (see createOutlineNode). */
 const isOutlineNode = (node: RenderNode) => node.outlineOf !== undefined;
 
+const isStroked = (node: RenderNode) => (node.sprite.strokeWidth ?? 0) > 0 && node.sprite.stroke !== "none";
+
+/** Whether `node` lifts its outline in `region` above the nodes the region cuts, rather than insetting it. */
+const hoists = (node: RenderNode, region: string) => !isOutlineNode(node) && !membership(node, region)?.inset;
+
 const pushTo = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
   const list = map.get(key);
   if (list) list.push(value);
@@ -53,81 +43,70 @@ const pushTo = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
 };
 
 /**
- * The nodes RigLayers paints, sorted by z-index: every node whose mask and clip groups all exist
- * (a node restricted to a group nobody defines is not drawn), plus an outline hoisted above the
- * dependents of each stroked clip-group owner. Returns copies; `nodes` is not modified.
+ * The nodes RigLayers paints, sorted by z-index: every node whose regions all exist (a node cut by a region
+ * nobody defines is not drawn), plus the hoisted outline of each stroked member that doesn't inset, just above
+ * the highest node its regions cut. Returns copies; `nodes` is not modified.
  */
 export const resolveVisibleNodes = (nodes: RenderNode[]): RenderNode[] => {
-  const maskGroups = getMaskGroups(nodes);
-  const clipGroups = getClippingGroups(nodes);
+  const regions = getRegions(nodes);
   const visible = nodes
-    .filter(
-      (node) =>
-        fillCuts(node, "mask").every((name) => maskGroups.has(name)) &&
-        fillCuts(node, "clip").every((name) => clipGroups.has(name)),
-    )
+    .filter((node) => fillCuts(node).every((name) => regions.has(name)))
     .map((node) => ({ ...node, sprite: { ...node.sprite } }));
 
   const nodeById = new Map(visible.map((node) => [node.id, node] as const));
-  const ownerIdsByClipName = new Map<string, string[]>();
-  const dependentsByClipName = new Map<string, RenderNode[]>();
+  const ownerIdsByRegion = new Map<string, string[]>();
+  const cutByRegion = new Map<string, RenderNode[]>();
   for (const node of visible) {
-    if (!isOutlineNode(node)) memberOf(node, "clip").forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
-    fillCuts(node, "clip").forEach((name) => pushTo(dependentsByClipName, name, node));
+    for (const name of memberOf(node)) if (hoists(node, name)) pushTo(ownerIdsByRegion, name, node.id);
+    for (const name of fillCuts(node)) pushTo(cutByRegion, name, node);
   }
 
-  // Highest dependent z-index per owner, in the order owners are first reached.
-  const maxDependentZByOwnerId = new Map<string, number>();
-  for (const [clipName, dependents] of dependentsByClipName) {
-    const dependentZ = Math.max(...dependents.map((node) => node.zIndex));
-    for (const ownerId of ownerIdsByClipName.get(clipName) ?? []) {
-      maxDependentZByOwnerId.set(ownerId, Math.max(maxDependentZByOwnerId.get(ownerId) ?? -Infinity, dependentZ));
+  // Highest cut node's z-index per owner, in the order owners are first reached.
+  const topCutZByOwnerId = new Map<string, number>();
+  for (const [name, cut] of cutByRegion) {
+    const topZ = Math.max(...cut.map((node) => node.zIndex));
+    for (const ownerId of ownerIdsByRegion.get(name) ?? []) {
+      topCutZByOwnerId.set(ownerId, Math.max(topCutZByOwnerId.get(ownerId) ?? -Infinity, topZ));
     }
   }
 
   const hoistedOutlines: RenderNode[] = [];
-  for (const [ownerId, maxDependentZ] of maxDependentZByOwnerId) {
+  for (const [ownerId, topZ] of topCutZByOwnerId) {
     const owner = nodeById.get(ownerId);
-    if (!owner || owner.linkedOutline || owner.disableOutlineHoisting) continue;
-    const { stroke, strokeWidth = 0 } = owner.sprite;
-    if (!stroke || stroke === "none" || strokeWidth <= 0) continue;
-    // Just above the highest dependent, so the outline draws over everything clipped to the owner.
-    hoistedOutlines.push(createOutlineNode(owner, Math.max(maxDependentZ, owner.zIndex) + 0.00000001));
+    if (!owner || owner.linkedOutline || !isStroked(owner)) continue;
+    // Just above the highest cut node, so the outline draws over everything the owner's regions cut.
+    hoistedOutlines.push(createOutlineNode(owner, Math.max(topZ, owner.zIndex) + 0.00000001));
   }
 
   return [...visible, ...hoistedOutlines].sort((a, b) => a.zIndex - b.zIndex);
 };
 
-/** One `<mask>` definition (see SvgMask). */
-export type MaskDef = {
-  key: string;
-  id: string;
-  groupName: string;
-  nodes: RenderNode[];
-  mode: "fill_only" | "outline_only";
-  withFill?: boolean;
-  withNoOutline?: boolean;
-};
+/**
+ * Which shape of a region a definition draws: "full" (the members' shapes), "inset" (the same, with the inner
+ * half of each insetting member's outline cut out), or "outline" (the members' outlines, for traced outlines).
+ */
+export type RegionShape = "full" | "inset" | "outline";
 
-/** Mask and clip definitions: only those some visible node uses. */
-export type DefsPlan = {
-  /**
-   * Mask groups that are also drawn as a clip-path (`${name}_group_clippath`, in `clipGroups`), with the ids of
-   * the nodes cut by that instead of the mask (see `drawsMaskAsClip`).
-   */
-  maskClips: ReadonlyMap<string, ReadonlySet<string>>;
-  maskFills: MaskDef[];
-  maskOutlines: MaskDef[];
-  clipOutlines: MaskDef[];
-  /** Clip groups by name, and the mask groups in `maskClips` by `${name}_group`. */
-  clipGroups: Map<string, ClipGroup>;
-};
+/** One <clipPath> or <mask> definition of a region's shape. */
+export type RegionDef = { key: string; id: string; region: string; shape: RegionShape; nodes: RenderNode[] };
+
+/**
+ * How a shape of a region is applied: a clip-path (for `clipUsers` only, when set), else a mask. Render groups
+ * take the clip-path when `groupsClip` is set.
+ */
+export type RegionForm = { clipId?: string; maskId?: string; clipUsers?: ReadonlySet<string>; groupsClip?: boolean };
+
+/** The forms of each region's shapes in use, by region name. */
+export type RegionForms = ReadonlyMap<string, { full?: RegionForm; inset?: RegionForm; outlineMaskId?: string }>;
+
+/** Region definitions: only those some visible node uses. */
+export type DefsPlan = { clips: RegionDef[]; masks: RegionDef[]; forms: RegionForms };
 
 export type RenderGroupLayer = {
   id: string;
   opacity?: number;
-  maskId?: string;
-  clipId?: string;
+  /** The region cuts applied to the whole group, outermost first. */
+  wrappers: FillWrapper[];
   blendMode?: CSSProperties["mixBlendMode"];
 };
 
@@ -152,7 +131,7 @@ export type LayerPlan = {
 };
 
 export type PlanLayersOptions = {
-  /** Every render node, sorted by z-index: mask and clip groups are drawn from these. */
+  /** Every render node, sorted by z-index: regions are drawn from these. */
   nodes: RenderNode[];
   /** The nodes to paint (see resolveVisibleNodes). */
   visibleNodes: RenderNode[];
@@ -160,157 +139,147 @@ export type PlanLayersOptions = {
   scopeId: ScopeId;
 };
 
-const isStroked = (node: RenderNode) => (node.sprite.strokeWidth ?? 0) > 0 && node.sprite.stroke !== "none";
-
 /**
- * Whether a mask group's no-outline mask only cuts hard edges, so a <clipPath> of its members' shapes draws
- * the same. That mask is the members' shapes, white, minus the inner half of each stroked member's outline:
- * so every member must add (not subtract), be opaque and have no outset, mask or clip of its own, and every
- * stroked member must paint its outline above every node the mask cuts, covering the band a clip keeps.
+ * Whether a node takes a hard-edged region with insetting members as a clip-path. Not when the node is clipped
+ * already (another region, its own mask or clip, or a render group's mask or clip): Chromium stops
+ * anti-aliasing clip-paths stacked that deep, which turns edges jagged (iris edges inside an eye clip, inside
+ * the face clip). Those nodes take the mask, which draws the inner clip in its own layer. Hoisting regions,
+ * which drew as clip-paths before regions, keep doing so.
  */
-const cutsHardEdges = (name: string, members: RenderNode[], visibleNodes: RenderNode[]) => {
-  const users = visibleNodes.filter((node) => fillCuts(node, "mask").includes(name) && !node.noSprite);
-  const topUserZ = Math.max(...users.map((node) => node.zIndex));
-  const paintedIds = new Set(visibleNodes.map((node) => node.id));
-  return members.every((node) => {
-    if (node.noSprite) return true;
-    const { sprite } = node;
-    const member = membership(node, name, "mask");
-    const plain =
-      member?.subtract !== true &&
-      !member?.outset &&
-      !node.mask &&
-      !member?.onlyWhereCut &&
-      (sprite.opacity ?? 1) >= 1 &&
-      !sprite.blur &&
-      !sprite.href &&
-      !sprite.customSprite?.image &&
-      !sprite.maskScale &&
-      sprite.shape !== "line";
-    if (!plain || !isStroked(node)) return plain;
-    return (
-      node.zIndex > topUserZ &&
-      paintedIds.has(node.id) &&
-      !node.hidden &&
-      !node.blendMode &&
-      !node.renderGroup &&
-      (node.opacity ?? 1) >= 1 &&
-      !isCut(node)
-    );
-  });
-};
-
-/**
- * Whether a node cut by a hard-edged mask group takes it as a clip-path. Not when the node is clipped already
- * (a clip group, its own mask or clip, or a render group's mask or clip): Chromium stops anti-aliasing clip-paths
- * stacked that deep, which turns edges jagged (iris edges inside an eye clip, inside the face clip). Those
- * nodes keep the mask, which draws the inner clip in its own layer.
- */
-const drawsMaskAsClip = (node: RenderNode, getRenderGroupOptions: GetRenderGroupOptions) => {
+const takesInsetClip = (node: RenderNode, region: string, getRenderGroupOptions: GetRenderGroupOptions) => {
   const renderGroup = node.renderGroup && getRenderGroupOptions(node.renderGroup.id);
-  return !fillCuts(node, "clip").length && !node.mask && !node.clip && !renderGroup?.clip && !renderGroup?.mask;
+  return (
+    fillCuts(node).every((name) => name === region) &&
+    !node.mask &&
+    !node.clip &&
+    !renderGroup?.clip &&
+    !renderGroup?.mask
+  );
 };
+
+type ShapeUse = { nodes: RenderNode[]; renderGroups: boolean; contributions: boolean };
 
 const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanLayersOptions): DefsPlan => {
-  const maskGroups = getMaskGroups(nodes);
-  const clipGroups = getClippingGroups(nodes);
+  const regions = getRegions(nodes);
+  const paintedIds = new Set(visibleNodes.map((node) => node.id));
 
-  // Which variants of each group's mask some visible node references.
-  const fill = new Set<string>();
-  const noOutline = new Set<string>();
-  const outline = new Set<string>();
-  const clipOutline = new Set<string>();
-  const renderGroupMasks = new Set<string>();
-  for (const node of visibleNodes) {
-    const renderGroupMask = node.renderGroup && getRenderGroupOptions(node.renderGroup.id)?.mask;
-    if (renderGroupMask) renderGroupMasks.add(renderGroupMask);
-    if (renderGroupMask) noOutline.add(renderGroupMask);
-    if (node.noSprite) continue;
-    fillCuts(node, "mask").forEach((name) => (node.traceOutline ? fill : noOutline).add(name));
-    if (!node.traceOutline) continue;
-    outlineCuts(node, "mask").forEach((name) => outline.add(name));
-    outlineCuts(node, "clip").forEach((name) => clipOutline.add(name));
-  }
-
-  const clipGroupList = Array.from(clipGroups.values());
-  // Only the no-outline variant can be a clip-path (render groups name the mask itself).
-  const maskClips = new Map<string, Set<string>>();
-  const maskReplaced = new Set<string>();
-  for (const group of maskGroups.values()) {
-    const hard =
-      noOutline.has(group.id) &&
-      !fill.has(group.id) &&
-      !outline.has(group.id) &&
-      !renderGroupMasks.has(group.id) &&
-      cutsHardEdges(group.id, group.groups, visibleNodes);
-    if (!hard) continue;
-    const users = visibleNodes.filter((node) => !node.noSprite && fillCuts(node, "mask").includes(group.id));
-    const clipUsers = users.filter((node) => drawsMaskAsClip(node, getRenderGroupOptions));
-    if (clipUsers.length) maskClips.set(group.id, new Set(clipUsers.map((node) => node.id)));
-    if (clipUsers.length === users.length) maskReplaced.add(group.id);
-  }
-  const maskGroupList = Array.from(maskGroups.values()).filter((group) => !maskReplaced.has(group.id));
-  const allClipGroups = new Map(clipGroups);
-  for (const name of maskClips.keys()) {
-    const members = maskGroups.get(name)!.groups.map((node) => ({ node, paintedAsMask: true }));
-    allClipGroups.set(`${name}_group`, { id: `${name}_group`, groups: members });
-  }
-
-  return {
-    maskClips,
-    maskFills: maskGroupList
-      .filter((group) => fill.has(group.id) || noOutline.has(group.id))
-      .map((group) => ({
-        key: scopeId(`${group.id}_group`),
-        id: scopeId(`${group.id}_group`),
-        groupName: group.id,
-        nodes: group.groups,
-        mode: "fill_only",
-        withFill: fill.has(group.id),
-        withNoOutline: noOutline.has(group.id),
-      })),
-    maskOutlines: maskGroupList
-      .filter((group) => outline.has(group.id))
-      .map((group) => ({
-        key: scopeId(`${group.id}_group_outline`),
-        id: scopeId(`${group.id}_group`),
-        groupName: group.id,
-        nodes: group.groups,
-        mode: "outline_only",
-      })),
-    clipOutlines: clipGroupList
-      .filter((group) => clipOutline.has(group.id))
-      .map((group) => ({
-        key: scopeId(`${group.id}_clip_mask`),
-        id: scopeId(`${group.id}_clip_mask`),
-        groupName: group.id,
-        nodes: group.groups.map((member) => member.node),
-        mode: "outline_only",
-      })),
-    clipGroups: allClipGroups,
+  // Who uses which shape of each region.
+  const uses = new Map<string, { full: ShapeUse; inset: ShapeUse; outline: boolean }>();
+  const useOf = (name: string) => {
+    let use = uses.get(name);
+    if (!use) {
+      const empty = (): ShapeUse => ({ nodes: [], renderGroups: false, contributions: false });
+      use = { full: empty(), inset: empty(), outline: false };
+      uses.set(name, use);
+    }
+    return use;
   };
+  for (const node of visibleNodes) {
+    const options = node.renderGroup && getRenderGroupOptions(node.renderGroup.id);
+    if (options?.mask && regions.has(options.mask)) useOf(options.mask).inset.renderGroups = true;
+    if (options?.clip && regions.has(options.clip)) useOf(options.clip).full.renderGroups = true;
+    if (node.noSprite) continue;
+    for (const name of fillCuts(node)) useOf(name)[node.traceOutline ? "full" : "inset"].nodes.push(node);
+    if (node.traceOutline) for (const name of outlineCuts(node)) useOf(name).outline = true;
+  }
+  // A member adding only where it's cut is cut, inside the region's mask, by the full shapes of its own cuts.
+  for (const region of regions.values()) {
+    for (const node of region.members) {
+      if (!membership(node, region.name)?.onlyWhereCut) continue;
+      for (const name of fillCuts(node)) if (name !== region.name && regions.has(name)) useOf(name).full.contributions = true;
+    }
+  }
+
+  const clips: RegionDef[] = [];
+  const masks: RegionDef[] = [];
+  const forms = new Map<string, { full?: RegionForm; inset?: RegionForm; outlineMaskId?: string }>();
+  const define = (list: RegionDef[], region: Region, shape: RegionShape) => {
+    const id = scopeId(`${region.name}_region${shape === "full" ? "" : `_${shape}`}`);
+    if (!list.some((existing) => existing.id === id)) list.push({ key: id, id, region: region.name, shape, nodes: region.members });
+    return id;
+  };
+
+  for (const [name, use] of uses) {
+    const region = regions.get(name);
+    if (!region) continue;
+    const drawn = region.members.filter((node) => !node.noSprite);
+    // A clip-path can only add shapes, with nothing cut out of them, and grow only paths (see ClipPathDefs).
+    const additive = drawn.every((node) => {
+      const member = membership(node, name);
+      const growsPath = !member?.outset || Boolean(node.sprite.customSprite || node.sprite.dynamicPath);
+      return !member?.subtract && !member?.onlyWhereCut && growsPath;
+    });
+    const insets = region.members.some((node) => membership(node, name)?.inset);
+    const bands = drawn.filter((node) => membership(node, name)?.inset && isStroked(node));
+
+    const form = (shape: "full" | "inset", users: ShapeUse): RegionForm => {
+      // The inset shape is hard only if every inset outline paints above every node it cuts, covering the band.
+      const topUserZ = Math.max(...users.nodes.map((node) => node.zIndex));
+      const covered = bands.every(
+        (node) =>
+          node.zIndex > topUserZ &&
+          paintedIds.has(node.id) &&
+          !node.hidden &&
+          !node.blendMode &&
+          !node.renderGroup &&
+          (node.opacity ?? 1) >= 1 &&
+          !isCut(node),
+      );
+      if (!additive || (shape === "inset" && (!covered || users.renderGroups))) {
+        return { maskId: define(masks, region, shape) };
+      }
+      if (!insets) return { clipId: define(clips, region, "full"), groupsClip: true };
+      const clipUsers = new Set(
+        users.nodes.filter((node) => takesInsetClip(node, name, getRenderGroupOptions)).map((node) => node.id),
+      );
+      // A render group cut by the full shape takes the clip-path, as it did before regions; by the inset shape, the mask.
+      const groupsClip = shape === "full";
+      const needsMask = (users.renderGroups && !groupsClip) || clipUsers.size < users.nodes.length;
+      return {
+        clipId: clipUsers.size || users.contributions || (users.renderGroups && groupsClip) ? define(clips, region, "full") : undefined,
+        maskId: needsMask ? define(masks, region, shape) : undefined,
+        clipUsers,
+        groupsClip,
+      };
+    };
+
+    // Without an outline to cut out, the inset shape is the full shape.
+    const fullUse: ShapeUse = bands.length
+      ? use.full
+      : {
+          nodes: [...use.full.nodes, ...use.inset.nodes],
+          renderGroups: use.full.renderGroups || use.inset.renderGroups,
+          contributions: use.full.contributions,
+        };
+    const used = (shapeUse: ShapeUse) => shapeUse.nodes.length > 0 || shapeUse.renderGroups || shapeUse.contributions;
+    const full = used(fullUse) ? form("full", fullUse) : undefined;
+    const inset = !bands.length ? full : used(use.inset) ? form("inset", use.inset) : undefined;
+    forms.set(name, { full, inset, outlineMaskId: use.outline ? define(masks, region, "outline") : undefined });
+  }
+
+  return { clips, masks, forms };
 };
 
 /**
- * Where each mask outline paints, by the id of the node it follows: a clipped node's mask outline
- * goes after its clip owner's outline when that outline paints at or above the node, so the owner's
+ * Where each mask outline paints, by the id of the node it follows: a cut node's mask outline goes after
+ * the hoisted outline of its region's owner when that outline paints at or above the node, so the owner's
  * outline can't cover it; otherwise it goes after the node's own fill.
  */
 const anchorMaskOutlines = (nodes: RenderNode[]): Map<string, RenderNode[]> => {
   const ownerById = new Map(nodes.filter((node) => !isOutlineNode(node)).map((node) => [node.id, node] as const));
-  const ownerIdsByClipName = new Map<string, string[]>();
+  const ownerIdsByRegion = new Map<string, string[]>();
   const outlineByOwnerId = new Map<string, RenderNode>();
   for (const node of nodes) {
     if (node.outlineOf !== undefined) outlineByOwnerId.set(node.outlineOf, node);
-    else memberOf(node, "clip").forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
+    else for (const name of memberOf(node)) if (hoists(node, name)) pushTo(ownerIdsByRegion, name, node.id);
   }
 
   // The highest owner at or below the node, or failing that the highest owner.
   const findOwner = (node: RenderNode) => {
     let best: RenderNode | undefined;
     let highest: RenderNode | undefined;
-    for (const clipName of fillCuts(node, "clip")) {
-      for (const ownerId of ownerIdsByClipName.get(clipName) ?? []) {
+    for (const name of fillCuts(node)) {
+      for (const ownerId of ownerIdsByRegion.get(name) ?? []) {
         const owner = ownerById.get(ownerId);
         if (!owner) continue;
         if (owner.zIndex <= node.zIndex && owner.zIndex > (best?.zIndex ?? -Infinity)) best = owner;
@@ -322,9 +291,8 @@ const anchorMaskOutlines = (nodes: RenderNode[]): Map<string, RenderNode[]> => {
 
   const byAnchorId = new Map<string, RenderNode[]>();
   for (const node of nodes) {
-    const isClipped = fillCuts(node, "clip").length > 0;
-    if (!node.traceOutline || (!isClipped && !fillCuts(node, "mask").length)) continue;
-    const owner = isClipped ? findOwner(node) : undefined;
+    if (!node.traceOutline || !isCut(node)) continue;
+    const owner = findOwner(node);
     const ownerOutline = owner && outlineByOwnerId.get(owner.id);
     const anchorId = ownerOutline && ownerOutline.zIndex >= node.zIndex ? ownerOutline.id : node.id;
     pushTo(byAnchorId, anchorId, node);
@@ -339,11 +307,17 @@ type SequenceItem =
   /** Must not be wrapped with the fills around it. */
   | { kind: "barrier"; item: PaintItem };
 
+/** The wrapper applying a region's shape to a render group: its clip-path when every user takes it, else its mask. */
+const groupWrapper = (form: RegionForm | undefined): FillWrapper | undefined => {
+  if (form?.clipId && form.groupsClip) return `clip:${form.clipId}`;
+  if (form?.maskId) return `mask:${form.maskId}`;
+  return undefined;
+};
+
 const planPaint = (
   nodes: RenderNode[],
   getRenderGroupOptions: GetRenderGroupOptions,
-  scopeId: ScopeId,
-  maskClips: ReadonlyMap<string, ReadonlySet<string>>,
+  forms: RegionForms,
 ): { items: PaintItem[]; outerOutlines: RenderNode[] } => {
   const maskOutlinesByAnchorId = anchorMaskOutlines(nodes);
   const outerOutlines: RenderNode[] = [];
@@ -360,7 +334,7 @@ const planPaint = (
         list.push({ kind: node.blendMode || maskOutlines ? "barrier" : "free", item });
         continue;
       }
-      const wrappers = listFillWrappers(getFillWrapTargets(node, scopeId, false, maskClips)).filter((w) => !groupWrappers.includes(w));
+      const wrappers = listFillWrappers(getFillWrapTargets(node, false, forms)).filter((w) => !groupWrappers.includes(w));
       list.push({ kind: "fill", node, wrappers });
       if (maskOutlines) {
         list.push({ kind: "barrier", item: { kind: "maskOutlines", key: `masks_${node.id}`, nodes: maskOutlines } });
@@ -434,20 +408,18 @@ const planPaint = (
     if (lastIndexByGroupId.get(id) !== index) return;
     flush();
     const options = getRenderGroupOptions(id);
-    const maskId = options?.mask ? scopeId(`${options.mask}_group_no_outline`) : undefined;
-    const clipId = options?.clip ? scopeId(`${options.clip}_clippath`) : undefined;
-    const groupWrappers: FillWrapper[] = [
-      ...(maskId ? [`mask:${maskId}` as const] : []),
-      ...(clipId ? [`clip:${clipId}` as const] : []),
-    ];
+    // A render group's `mask` cuts it by the region's inset shape, its `clip` by the full shape.
+    const groupWrappers = [
+      groupWrapper(options?.mask ? forms.get(options.mask)?.inset : undefined),
+      groupWrapper(options?.clip ? forms.get(options.clip)?.full : undefined),
+    ].filter((wrapper): wrapper is FillWrapper => wrapper !== undefined);
     items.push({
       kind: "renderGroup",
       key: `render_group_${id}`,
       group: {
         id,
         opacity: options?.opacity === undefined ? undefined : Math.max(0, Math.min(1, options.opacity)),
-        maskId,
-        clipId,
+        wrappers: groupWrappers,
         blendMode: options?.blendMode ?? "normal",
       },
       items: planSequence(membersByGroupId.get(id)!, groupWrappers),
@@ -461,5 +433,5 @@ const planPaint = (
 /** Plans the defs and paint order for `visibleNodes` (see LayerPlan). */
 export const planLayers = (options: PlanLayersOptions): LayerPlan => {
   const defs = planDefs(options);
-  return { defs, ...planPaint(options.visibleNodes, options.getRenderGroupOptions, options.scopeId, defs.maskClips) };
+  return { defs, ...planPaint(options.visibleNodes, options.getRenderGroupOptions, defs.forms) };
 };
