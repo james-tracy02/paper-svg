@@ -108,7 +108,7 @@ type RenderOptions = {
   parentClippingGroups?: string[];
   parentMaskGroupModes?: Record<string, "positive" | "negative">;
   /** World matrices from the previous build pass, used to resolve `aimAt`/`pinTo` targets. */
-  targetMatrices?: Map<string, MatrixTransform>;
+  targetMatrices?: TargetMatrices;
   patternSpace?: MatrixTransform;
   /** World frame of the gradient unit square set by the nearest `gradientSpace: "define"` ancestor. */
   gradientSpace?: MatrixTransform;
@@ -140,7 +140,10 @@ const makeTransform = (body: Node, scaleFactor: Vector2, fidelity: number = 4): 
     : undefined,
 });
 
-const IDENTITY_MATRIX: MatrixTransform = {
+/** World matrices of `aimAt`/`pinTo` targets, by node id. */
+export type TargetMatrices = { get(id: string): MatrixTransform | undefined };
+
+export const IDENTITY_MATRIX: MatrixTransform = {
   translate: { x: 0, y: 0 },
   matrix: { a: 1, b: 0, c: 0, d: 1 },
 };
@@ -171,7 +174,7 @@ const angleOf = (v: Vector2) => Math.atan2(-v.y, v.x) * (180 / Math.PI);
 const resolvePinTranslate = (
   pin: NonNullable<Node["pinTo"]>,
   parentMatrix: MatrixTransform,
-  targetMatrices: Map<string, MatrixTransform>,
+  targetMatrices: TargetMatrices,
 ): Vector2 | undefined => {
   const targetMatrix = targetMatrices.get(pin.targetId);
   if (!targetMatrix) return undefined;
@@ -190,7 +193,7 @@ const resolveAimRotation = (
   aim: NonNullable<Node["aimAt"]>,
   myTransform: Transform,
   parentMatrix: MatrixTransform,
-  targetMatrices: Map<string, MatrixTransform>,
+  targetMatrices: TargetMatrices,
 ): { rotation: number; reach: number } | undefined => {
   const targetMatrix = targetMatrices.get(aim.targetId);
   if (!targetMatrix) return undefined;
@@ -222,7 +225,7 @@ const resolveAimRotation = (
 const resolveArrivePath = (
   aim: NonNullable<Node["aimAt"]>,
   worldMatrix: MatrixTransform,
-  targetMatrices: Map<string, MatrixTransform>,
+  targetMatrices: TargetMatrices,
 ): string | undefined => {
   const targetMatrix = targetMatrices.get(aim.targetId);
   if (!targetMatrix || !aim.arrive) return undefined;
@@ -241,11 +244,12 @@ const resolveArrivePath = (
   return `M 0 0 Q ${r(control.x)} ${r(-control.y)} ${r(from.x)} ${r(-from.y)}`;
 };
 
-const resolveNodeTransform = (
+/** A node's local transform: its own values, fixed rotation and scale, then its `pinTo` and `aimAt`. */
+export const resolveNodeTransform = (
   body: Node,
   parentMatrix: MatrixTransform,
   scaleFactor: Vector2,
-  targetMatrices?: Map<string, MatrixTransform>,
+  targetMatrices?: TargetMatrices,
 ): Transform => {
   const myTransform = makeTransform(body, scaleFactor);
 
