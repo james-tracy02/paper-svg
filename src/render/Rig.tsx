@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { Node } from "../types/Node";
+import type { Pose } from "../types/Pose";
 import type { Color, Vector2 } from "../types/primitives";
 import type { RenderGroupOptions } from "../types/RenderGroup";
 import type { RenderNode } from "./RenderTree";
@@ -42,6 +43,11 @@ export type RigEffects = {
 export type RigProps = {
   /** Root of the node tree to render. */
   body: Node;
+  /**
+   * Joint rotations, offsets, scales and named values on top of `body`. Changing only the pose re-places
+   * nodes without rebuilding the tree. Pass the same object while it is unchanged.
+   */
+  pose?: Pose;
   /** Uniform scale applied to the whole rig. */
   scale?: number;
   /** Mirror the rig horizontally. */
@@ -62,6 +68,7 @@ export type RigProps = {
 /** Renders a node tree to SVG. Place it inside an `<svg>`. */
 const Rig: React.FC<RigProps> = ({
   body,
+  pose,
   scale = 1,
   mirror = false,
   idPrefix = "rig",
@@ -72,7 +79,7 @@ const Rig: React.FC<RigProps> = ({
   effects,
 }) => {
   const scopeId = useCallback((suffix: string) => `${idPrefix}_${suffix}`, [idPrefix]);
-  const nodes = useRenderNodes(body);
+  const nodes = useRenderNodes(body, pose);
 
   const partRefs = useRef<Record<string, SVGGElement | null>>({});
   const setPartRef = useCallback((id: string, element: SVGGElement | null) => {

@@ -6,7 +6,7 @@
 import { Profiler, useState, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { getRenderNodes, getZoomVars, Rig, type Node } from "paper-svg";
+import { getRenderNodes, getZoomVars, Rig, type Node, type Pose } from "paper-svg";
 import { buildMaskSignature } from "../src/render/RenderTree";
 import { createNodeInterner } from "../src/render/stableNodes";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
@@ -26,7 +26,7 @@ const rebuildWithRotation = (node: Node, id: string, degrees: number): Node => (
   attachments: node.attachments?.map((child) => rebuildWithRotation(child, id, degrees)),
 });
 
-type State = { body: Node; zoom: number; tick: number };
+type State = { body: Node; pose?: Pose; zoom: number; tick: number };
 let setState: (update: (state: State) => State) => void = () => {};
 const commits: number[] = [];
 
@@ -45,6 +45,7 @@ const App = () => {
       <Profiler id="rig" onRender={(_id, _phase, actualDuration) => commits.push(actualDuration)}>
         <Rig
           body={state.body}
+          pose={state.pose}
           scale={fixture.scale}
           mirror={fixture.mirror}
           idPrefix="bench"
@@ -79,6 +80,14 @@ const bench = {
   },
   bodies: [] as Node[],
   pose: (index: number) => update((state) => ({ ...state, body: bench.bodies[index] })),
+  /** Turns `joints` by `index + 1` degrees each through the pose prop, on the unchanged body. */
+  posePose: (index: number, joints: string[]) =>
+    update((state) => ({
+      ...state,
+      body: fixture.body,
+      pose: { rotations: Object.fromEntries(joints.map((id) => [id, index + 1])) },
+    })),
+  resetPose: () => update((state) => ({ ...state, body: fixture.body, pose: undefined })),
   rerender: () => update((state) => ({ ...state, tick: state.tick + 1 })),
   zoom: (zoom: number) => update((state) => ({ ...state, zoom })),
   takeCommits: () => commits.splice(0),

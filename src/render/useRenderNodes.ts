@@ -1,12 +1,29 @@
 import { useMemo, useState } from "react";
 import type { Node } from "../types/Node";
-import { buildMaskSignature, getRenderNodes } from "./RenderTree";
+import type { Pose } from "../types/Pose";
+import { solvePose } from "./pose";
+import { createRigLayout, createRigPoser, type PosedRig } from "./posedRig";
 import { createNodeInterner } from "./stableNodes";
 
-/** The tree's render nodes sorted by zIndex. Unchanged nodes keep their identity across rebuilds. */
-export const useRenderNodes = (body: Node) => {
-  const maskSignature = buildMaskSignature(body);
-  const [intern] = useState(createNodeInterner);
-  const nodes = useMemo(() => intern(getRenderNodes(body)), [body, maskSignature, intern]);
-  return useMemo(() => [...nodes].sort((a, b) => a.zIndex - b.zIndex), [nodes]);
+/** The posed rig each `useRenderNodes` result came from, so RigLayers can reuse its layout across poses. */
+const posedRigs = new WeakMap<readonly unknown[], PosedRig>();
+
+/** The posed rig behind a `useRenderNodes` result, if it came from one. */
+export const getPosedRig = (nodes: readonly unknown[]): PosedRig | undefined => posedRigs.get(nodes);
+
+/**
+ * The tree's render nodes in `pose`, sorted by zIndex. The tree is laid out once per `body`; a new
+ * `pose` only re-places nodes, and nodes it doesn't move keep their identity, as do unchanged nodes
+ * across rebuilds of `body`. Pass the same `pose` object while it is unchanged.
+ */
+export const useRenderNodes = (body: Node, pose?: Pose) => {
+  const [interners] = useState(() => ({ nodes: createNodeInterner(), visible: createNodeInterner() }));
+  const [poser] = useState(createRigPoser);
+  const layout = useMemo(() => createRigLayout(body, interners), [body, interners]);
+  const solution = useMemo(() => solvePose(layout.rig, pose), [layout, pose]);
+  return useMemo(() => {
+    const posed = poser(layout, solution);
+    posedRigs.set(posed.nodes, posed);
+    return posed.nodes;
+  }, [poser, layout, solution]);
 };

@@ -15,7 +15,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { CSSProperties } from "react";
-import { getZoomVars, makeSprite, registerCustomSprite, Rig, type RigProps } from "../../src";
+import { getZoomVars, makeSprite, registerCustomSprite, Rig, type Node, type RigProps } from "../../src";
 import { upgradeFixture, type RigFixture } from "../fixtures/RigFixture";
 import { buildScene, DEFAULT_POSE, STAR_SPRITE_ID, STAR_SVG } from "../../demo/puppet";
 
@@ -97,6 +97,33 @@ const renderRig = async (props: RigProps) => {
   return svg;
 };
 
+/** Renders `first`, lets it settle, then re-renders the same rig with `next`; returns the settled markup. */
+const renderRigMarkup = async (first: RigProps, next?: RigProps) => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  cleanups.push(() => {
+    root.unmount();
+    host.remove();
+  });
+  const draw = (props: RigProps) =>
+    flushSync(() =>
+      root.render(
+        <svg xmlns={SVG_NS} width={800} height={1000} viewBox="-200 -250 400 500" style={getZoomVars(PIXELS_PER_UNIT) as CSSProperties}>
+          <Rig {...props} />
+        </svg>,
+      ),
+    );
+  draw(first);
+  const svg = host.querySelector("svg")!;
+  await settle(svg);
+  if (next) {
+    draw(next);
+    await settle(svg);
+  }
+  return formatMarkup(svg);
+};
+
 /** One element per line, so snapshot diffs point at the element that changed. */
 const formatMarkup = (svg: SVGSVGElement) => svg.outerHTML.replace(/></g, ">\n<") + "\n";
 
@@ -138,6 +165,22 @@ describe("fixtures", () => {
 
     it(`${name}`, async () => {
       await expectRigSnapshot(name, fixtureProps(fixture));
+    });
+
+    it(`${name} posed through the pose prop draws what a rebuild with the rotations draws`, async () => {
+      const rotations: Record<string, number> = { forearm_right: 35, arm_left: -20, torso: 6, head: -10, leg_right: 12 };
+      const props = fixtureProps(fixture);
+      const withRotations = (node: Node): Node => ({
+        ...node,
+        rotate: node.rotate + (rotations[node.id] ?? 0),
+        joints: node.joints?.map(withRotations),
+        attachments: node.attachments?.map(withRotations),
+      });
+      const rebuilt = await renderRigMarkup({ ...props, body: withRotations(props.body) });
+      expect(rebuilt).not.toEqual(await renderRigMarkup(props));
+      // Posed from the first render, and again after a pose change on the same rig.
+      expect(await renderRigMarkup({ ...props, pose: { rotations } })).toEqual(rebuilt);
+      expect(await renderRigMarkup(props, { ...props, pose: { rotations } })).toEqual(rebuilt);
     });
 
     it(`${name} with a color transform`, async () => {
