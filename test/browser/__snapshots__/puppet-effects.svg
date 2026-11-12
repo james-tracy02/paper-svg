@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="510" height="866" viewBox="-164 -231 255 433" style="background: rgb(255, 255, 255); --zoom: 2; --stroke-pad: 0.25621499679048443px;">
+<g style="stroke-linejoin: round; stroke-linecap: round;">
+<defs>
+<filter id="puppet_glowFilter" x="-200%" y="-200%" width="400%" height="400%" color-interpolation-filters="sRGB">
+<feMorphology in="SourceGraphic" operator="dilate" radius="1" result="dilated">
+</feMorphology>
+<feGaussianBlur in="dilated" stdDeviation="1.5" result="blurred">
+</feGaussianBlur>
+<feFlood flood-color="#ffe08a" flood-opacity="1" result="glowColor">
+</feFlood>
+<feComposite in="glowColor" in2="blurred" operator="in" result="coloredGlow">
+</feComposite>
+<feMerge>
+<feMergeNode in="coloredGlow">
+</feMergeNode>
+<feMergeNode in="SourceGraphic">
+</feMergeNode>
+</feMerge>
+</filter>
+</defs>
+<g filter="url(#puppet_glowFilter)">
+<g transform="scale(1, 1) scale(-1, 1)">
+<defs>
+<path id="sym_cmzhdt" d="M50 5L61 38 95 38 68 59 79 93 50 72 21 93 32 59 5 38 39 38Z" vector-effect="non-scaling-stroke">
+</path>
+<path id="sym_72nf9d" d="M50 30L56 45 72 45 59 55 64 71 50 61 36 71 41 55 28 45 44 45Z" vector-effect="non-scaling-stroke">
+</path>
+</defs>
+<defs>
+</defs>
+<defs>
+</defs>
+<defs>
+<clipPath id="puppet_torso_shape_clippath" clipPathUnits="userSpaceOnUse">
+<ellipse rx="5" ry="5" transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)">
+</ellipse>
+</clipPath>
+</defs>
+<ellipse transform="matrix(0.9397, 0.342, -0.342, 0.9397, -36, -32) matrix(-2, 0, 0, 7, 0, 35)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9945, -0.1045, 0.1045, 0.9945, 19, 36) matrix(2.5, 0, 0, 7.4, 0, 37)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 25.8989, 101.6384) matrix(2, 0, 0, 7.4, 0, 37)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 29.3825, 173.804) matrix(3.4, 0, 0, 1.5, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9945, 0.1045, -0.1045, 0.9945, -19, 36) matrix(-2.5, 0, 0, 7.4, 0, 37)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -25.8989, 101.6384) matrix(-2, 0, 0, 7.4, 0, 37)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -29.3825, 173.804) matrix(-3.4, 0, 0, 1.5, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(6px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, -57.2052, 26.2609) matrix(-1.7, 0, 0, 6.6, 0, 33)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9781, 0.2079, -0.2079, 0.9781, 13, -93) matrix(2, 0, 0, 7, 0, -35)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9781, -0.2079, 0.2079, 0.9781, -13, -93) matrix(-2, 0, 0, 7, 0, -35)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, -59.2992, 86.2244) matrix(-2, 0, 0, 2.2, 0, 11)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(1, 0, 0, 1, 0, -46) matrix(5.4, 0, 0, 5.4, 0, -27)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(1, 0, 0, 1, 10, -78) matrix(1.4, 0, 0, 1.4, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(-0.6033, -0.7975, 0.7975, -0.6033, 10, -78) matrix(0.75, 0, 0, 0.75, 0, 3.2)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(1, 0, 0, 1, -10, -78) matrix(-1.4, 0, 0, 1.4, 0, 0)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(-0.5417, -0.8406, 0.8406, -0.5417, -10, -78) matrix(-0.75, 0, 0, 0.75, 0, 3.2)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<path transform="matrix(1, 0, 0, 1, 0, -59) matrix(1, 0, 0, 1, 0, 0)" d="M -8 0 Q 0 7 8 0" fill="none" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</path>
+<g transform="matrix(1, 0, 0, 1, -16, -20) matrix(0.2, 0, 0, 0.2, 0, 0) matrix(1, 0, 0, 1, -50, -49)" style="stroke-width: calc(4px * var(--zoom, 1));">
+<use href="#sym_cmzhdt" fill="none" stroke="#2b6cb0">
+</use>
+<use href="#sym_72nf9d" fill="none" stroke="#2b6cb0">
+</use>
+</g>
+<ellipse transform="matrix(-0.6428, -0.766, 0.766, -0.6428, 36, -32) matrix(2, 0, 0, 7, 0, 35)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(-0.8192, -0.5736, 0.5736, -0.8192, 83.4948, -71.8528) matrix(1.7, 0, 0, 6.6, 0, 33)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<ellipse transform="matrix(-0.8192, -0.5736, 0.5736, -0.8192, 117.9093, -121.002) matrix(2, 0, 0, 2.2, 0, 11)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<path transform="matrix(-0.9876, 0.1567, -4.3809, -27.615, 129.3809, -137.385) matrix(1, 0, 0, 1, 0, 0)" d="M 0 0 L 0 1" fill="none" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</path>
+<ellipse transform="matrix(1, 0, 0, 1, 125, -165) matrix(3.8, 0, 0, 4.6, 0, -23)" fill="none" rx="5" ry="5" stroke="#2b6cb0" vector-effect="non-scaling-stroke" style="stroke-width: calc(4px * var(--zoom, 1));">
+</ellipse>
+<g transform="matrix(0.9397, 0.342, -0.342, 0.9397, -36, -32)" data-render-id="arm_left" data-rotate-chain="arm_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-2, 0, 0, 7, 0, 35)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9945, -0.1045, 0.1045, 0.9945, 19, 36)" data-render-id="thigh_right" data-rotate-chain="thigh_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(2.5, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 25.8989, 101.6384)" data-render-id="shin_right" data-rotate-chain="shin_right thigh_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(2, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 29.3825, 173.804)" data-render-id="foot_right" data-rotate-chain="shin_right thigh_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(3.4, 0, 0, 1.5, 0, 0)" fill="#000000ff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9945, 0.1045, -0.1045, 0.9945, -19, 36)" data-render-id="thigh_left" data-rotate-chain="thigh_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-2.5, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -25.8989, 101.6384)" data-render-id="shin_left" data-rotate-chain="shin_left thigh_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-2, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -29.3825, 173.804)" data-render-id="foot_left" data-rotate-chain="shin_left thigh_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-3.4, 0, 0, 1.5, 0, 0)" fill="#000000ff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(1, 0, 0, 1, 0, 0)" data-render-id="torso" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(7.2, 0, 0, 10.5, 0, 0)" fill="#4f9d69" rx="5" ry="5">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, -57.2052, 26.2609)" data-render-id="forearm_left" data-rotate-chain="forearm_left arm_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-1.7, 0, 0, 6.6, 0, 33)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9781, 0.2079, -0.2079, 0.9781, 13, -93)" data-render-id="ear_right" data-rotate-chain="ear_right head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(2, 0, 0, 7, 0, -35)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9781, -0.2079, 0.2079, 0.9781, -13, -93)" data-render-id="ear_left" data-rotate-chain="ear_left head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-2, 0, 0, 7, 0, -35)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, -59.2992, 86.2244)" data-render-id="hand_left" data-rotate-chain="hand_left forearm_left arm_left" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-2, 0, 0, 2.2, 0, 11)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g clip-path="url(#puppet_torso_shape_clippath)">
+<g transform="matrix(0.8192, 0.5736, -0.5736, 0.8192, 0, 0)" data-render-id="sash" style="pointer-events: none;">
+<rect transform="matrix(13, 0, 0, 1.7, 0, 0)" fill="#ef4444" x="-5" y="-5" width="10" height="10" stroke="#000000ff" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
+</rect>
+</g>
+</g>
+<g transform="matrix(1, 0, 0, 1, 0, 0)" data-render-id="torso_outline" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(7.2, 0, 0, 10.5, 0, 0)" fill="none" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(1, 0, 0, 1, 0, -46)" data-render-id="head" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(5.4, 0, 0, 5.4, 0, -27)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(1, 0, 0, 1, 10, -78)" data-render-id="eye_right" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(1.4, 0, 0, 1.4, 0, 0)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(-0.6033, -0.7975, 0.7975, -0.6033, 10, -78)" data-render-id="pupil_right" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(0.75, 0, 0, 0.75, 0, 3.2)" fill="#000000ff" rx="5" ry="5" style="cursor: grab;">
+</ellipse>
+</g>
+<g transform="matrix(1, 0, 0, 1, -10, -78)" data-render-id="eye_left" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-1.4, 0, 0, 1.4, 0, 0)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(-0.5417, -0.8406, 0.8406, -0.5417, -10, -78)" data-render-id="pupil_left" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(-0.75, 0, 0, 0.75, 0, 3.2)" fill="#000000ff" rx="5" ry="5" style="cursor: grab;">
+</ellipse>
+</g>
+<g transform="matrix(1, 0, 0, 1, 0, -59)" data-render-id="mouth" data-rotate-chain="head" style="pointer-events: visiblepainted;">
+<path transform="matrix(1, 0, 0, 1, 0, 0)" d="M -8 0 Q 0 7 8 0" fill="none" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</path>
+</g>
+<g transform="matrix(1, 0, 0, 1, -16, -20)" data-render-id="badge" style="pointer-events: visiblepainted;">
+<g transform="matrix(0.2, 0, 0, 0.2, 0, 0) matrix(1, 0, 0, 1, -50, -49)">
+<use href="#sym_cmzhdt" fill="#ffd54a">
+</use>
+<use href="#sym_72nf9d" fill="#f59e0b">
+</use>
+</g>
+</g>
+<g transform="matrix(-0.6428, -0.766, 0.766, -0.6428, 36, -32)" data-render-id="arm_right" data-rotate-chain="arm_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(2, 0, 0, 7, 0, 35)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(-0.8192, -0.5736, 0.5736, -0.8192, 83.4948, -71.8528)" data-render-id="forearm_right" data-rotate-chain="forearm_right arm_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(1.7, 0, 0, 6.6, 0, 33)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(-0.8192, -0.5736, 0.5736, -0.8192, 117.9093, -121.002)" data-render-id="hand_right" data-rotate-chain="hand_right forearm_right arm_right" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(2, 0, 0, 2.2, 0, 11)" fill="#ffffff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+<g transform="matrix(-0.9876, 0.1567, -4.3809, -27.615, 129.3809, -137.385)" data-render-id="string" style="pointer-events: visiblepainted;">
+<path transform="matrix(1, 0, 0, 1, 0, 0)" d="M 0 0 L 0 1" fill="none" stroke="#000000ff" vector-effect="non-scaling-stroke" style="stroke-width: calc(1.5px * var(--zoom, 1));">
+</path>
+</g>
+<g transform="matrix(1, 0, 0, 1, 125, -165)" data-render-id="balloon" style="pointer-events: visiblepainted;">
+<ellipse transform="matrix(3.8, 0, 0, 4.6, 0, -23)" fill="#ef4444" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
+</ellipse>
+</g>
+</g>
+</g>
+</g>
+</svg>

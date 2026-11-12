@@ -24,7 +24,8 @@
     "dev": "vite build --watch",
     "demo": "vite --config demo/vite.config.ts",
     "demo:build": "vite build --config demo/vite.config.ts",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
+    "test:snapshots": "vitest run --project browser",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {
@@ -38,6 +39,8 @@
   "devDependencies": {
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.3.0",
+    "@vitest/browser-playwright": "^5.1.0",
+    "playwright": "^1.65.0",
     "react": "^19.1.1",
     "react-dom": "^19.3.1",
     "typescript": "~5.8.3",
