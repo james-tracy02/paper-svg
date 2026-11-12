@@ -70,7 +70,7 @@ describe("NodeBuilder", () => {
 
     expect(node.joints).toEqual([child]);
     expect(node.attachments).toEqual([]);
-    expect(node.clippedBy).toEqual(["m"]);
+    expect(node.maskedBy).toEqual(["m"]);
   });
 });
 

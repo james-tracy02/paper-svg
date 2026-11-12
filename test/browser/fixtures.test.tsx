@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { CSSProperties } from "react";
 import { getZoomVars, makeSprite, registerCustomSprite, Rig, type RigProps } from "../../src";
-import type { RigFixture } from "../fixtures/RigFixture";
+import { upgradeFixture, type RigFixture } from "../fixtures/RigFixture";
 import { buildScene, DEFAULT_POSE, STAR_SPRITE_ID, STAR_SVG } from "../../demo/puppet";
 
 const fixtures = import.meta.glob<RigFixture>("../fixtures/*.rig.json", { eager: true, import: "default" });
@@ -106,7 +106,8 @@ const expectRigSnapshot = async (name: string, props: RigProps) => {
   await expect.element(page.elementLocator(svg)).toMatchScreenshot(name);
 };
 
-const fixtureProps = (fixture: RigFixture): RigProps => {
+const fixtureProps = (exported: RigFixture): RigProps => {
+  const fixture = upgradeFixture(exported);
   const hiddenTags = new Set(fixture.hiddenRenderGroupTags);
   return {
     body: fixture.body,

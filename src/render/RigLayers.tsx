@@ -6,7 +6,7 @@ import SvgMask from "./Mask";
 import SvgGroup from "./Group";
 import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
-import TrueClipDefs, { getTrueClippingGroups, type TrueClipGroup } from "./TrueClipDefs";
+import TrueClipDefs, { getClippingGroups, type TrueClipGroup } from "./TrueClipDefs";
 import type { RenderNode } from "./RenderTree";
 import { createNodeInterner } from "./stableNodes";
 import { getFillWrapTargets, listFillWrappers, wrapWith, type FillWrapper } from "./fillWrappers";
@@ -42,16 +42,16 @@ export type RigLayersProps = {
   isHidden?: (node: RenderNode) => boolean;
 };
 
-type ClippingGroup = { id: string; groups: RenderNode[] };
+type MaskGroup = { id: string; groups: RenderNode[] };
 
 const noRenderGroupOptions = () => undefined;
 const noRotate = () => () => {};
 const noPartRef = () => {};
 
-const getClippingGroups = (groups: RenderNode[]): Map<string, ClippingGroup> => {
-  const map = new Map<string, ClippingGroup>();
+const getMaskGroups = (groups: RenderNode[]): Map<string, MaskGroup> => {
+  const map = new Map<string, MaskGroup>();
   for (const g of groups) {
-    for (const name of g.clippingGroups ?? []) {
+    for (const name of g.maskGroups ?? []) {
       if (!map.has(name)) map.set(name, { id: name, groups: [] });
       map.get(name)!.groups.push(g);
     }
@@ -86,16 +86,16 @@ const RigLayers: React.FC<RigLayersProps> = ({
 }) => {
   const [internTrueClipNodes] = useState(createNodeInterner);
 
-  const clippingGroups = getClippingGroups(sortedGroups);
-  const trueClipGroups = getTrueClippingGroups(sortedGroups);
+  const maskGroups = getMaskGroups(sortedGroups);
+  const trueClipGroups = getClippingGroups(sortedGroups);
 
   const isMaskingFullyResolved = useCallback(
     (g: RenderNode) => {
-      if ((g.clippedBy ?? []).some((name) => !clippingGroups.has(name))) return false;
-      if ((g.trueClippedBy ?? []).some((name) => !trueClipGroups.has(name))) return false;
+      if ((g.maskedBy ?? []).some((name) => !maskGroups.has(name))) return false;
+      if ((g.clippedBy ?? []).some((name) => !trueClipGroups.has(name))) return false;
       return true;
     },
-    [clippingGroups, trueClipGroups],
+    [maskGroups, trueClipGroups],
   );
 
   const trueClipRenderNodes = useMemo(() => {
@@ -105,7 +105,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
     const ownersByClipName = new Map<string, string[]>();
     for (const g of baseGroups) {
       if (g.id.endsWith("_outline")) continue;
-      for (const name of g.trueClippingGroups ?? []) {
+      for (const name of g.clippingGroups ?? []) {
         if (!ownersByClipName.has(name)) ownersByClipName.set(name, []);
         ownersByClipName.get(name)!.push(g.id);
       }
@@ -115,7 +115,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
     const stagedKeysByOwnerId = new Map<string, Set<string>>();
     const dependentsByClipName = new Map<string, RenderNode[]>();
     for (const g of baseGroups) {
-      for (const clipName of g.trueClippedBy ?? []) {
+      for (const clipName of g.clippedBy ?? []) {
         if (!dependentsByClipName.has(clipName)) dependentsByClipName.set(clipName, []);
         dependentsByClipName.get(clipName)!.push(g);
       }
@@ -179,10 +179,10 @@ const RigLayers: React.FC<RigLayersProps> = ({
       const renderGroupMask = g.renderGroup && getRenderGroupOptions(g.renderGroup.id)?.mask;
       if (renderGroupMask) noOutline.add(renderGroupMask);
       if (g.noSprite) continue;
-      (g.clippedBy ?? []).forEach((name) => (g.maskOutline ? fill : noOutline).add(name));
+      (g.maskedBy ?? []).forEach((name) => (g.maskOutline ? fill : noOutline).add(name));
       if (!g.maskOutline) continue;
-      (g.outlineClippedBy ?? g.clippedBy ?? []).forEach((name) => outline.add(name));
-      (g.outlineTrueClippedBy ?? g.outlineClippedBy ?? g.trueClippedBy ?? []).forEach((name) =>
+      (g.outlineMaskedBy ?? g.maskedBy ?? []).forEach((name) => outline.add(name));
+      (g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? []).forEach((name) =>
         trueClipOutline.add(name),
       );
     }
@@ -197,7 +197,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
     const resolvedOpacity = isHidden?.(g) ? 0 : g.opacity;
     const isClipped =
       g.pointerEvents !== true &&
-      Boolean((g.clippedBy && g.clippedBy.length) || (g.trueClippedBy && g.trueClippedBy.length));
+      Boolean((g.maskedBy && g.maskedBy.length) || (g.clippedBy && g.clippedBy.length));
     const interaction = resolveInteraction?.(g);
     const pointerEvents = interaction?.pointerEvents ?? (isClipped ? false : undefined);
     const renderGroup = pointerEvents === undefined ? g : withPointerEvents(g, pointerEvents);
@@ -304,7 +304,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
         const ownersByClipName = new Map<string, string[]>();
         nodes.forEach((node) => {
           if (node.id.endsWith("_outline")) return;
-          for (const name of node.trueClippingGroups ?? []) {
+          for (const name of node.clippingGroups ?? []) {
             if (!ownersByClipName.has(name)) ownersByClipName.set(name, []);
             ownersByClipName.get(name)!.push(node.id);
           }
@@ -321,7 +321,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
       };
 
       const selectOwnerForMask = (node: RenderNode, index: OwnerIndex) => {
-        const clipNames = node.trueClippedBy ?? [];
+        const clipNames = node.clippedBy ?? [];
         let bestOwnerId: string | undefined;
         let bestZ = Number.NEGATIVE_INFINITY;
         let fallbackOwnerId: string | undefined;
@@ -354,8 +354,8 @@ const RigLayers: React.FC<RigLayersProps> = ({
       const ownerIndex = buildOwnerIndex(groupsToRender);
       const maskOutlineByNodeId = new Map<string, React.ReactNode[]>();
       groupsToRender.forEach((node) => {
-        const hasTrueClip = Boolean(node.trueClippedBy?.length);
-        const hasMask = Boolean(node.clippedBy?.length);
+        const hasTrueClip = Boolean(node.clippedBy?.length);
+        const hasMask = Boolean(node.maskedBy?.length);
         if (!node.maskOutline || (!hasTrueClip && !hasMask)) return;
         const anchorOwner = hasTrueClip ? selectOwnerForMask(node, ownerIndex) : undefined;
         const anchorId =
@@ -506,7 +506,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
       );
     })();
 
-  const makeClippingGroups = (groupsMap: Map<string, ClippingGroup>) => (
+  const makeMaskGroups = (groupsMap: Map<string, MaskGroup>) => (
     <defs>
       {Array.from(groupsMap.values())
         .filter((cg) => usedMasks.fill.has(cg.id) || usedMasks.noOutline.has(cg.id))
@@ -524,7 +524,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
     </defs>
   );
 
-  const makeClippingOutlineMasks = (groupsMap: Map<string, ClippingGroup>) => {
+  const makeClippingOutlineMasks = (groupsMap: Map<string, MaskGroup>) => {
     if (!groupsMap.size) return null;
     return (
       <defs>
@@ -563,7 +563,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
   };
 
   const makeTrueClipFillMasks = (groupsMap: Map<string, TrueClipGroup>) => {
-    const names = new Set(sortedGroups.filter((g) => g.clipMaskContribution).flatMap((g) => g.trueClippedBy ?? []));
+    const names = new Set(sortedGroups.filter((g) => g.clipMaskContribution).flatMap((g) => g.clippedBy ?? []));
     const used = Array.from(groupsMap.values()).filter((cg) => names.has(cg.id));
     if (!used.length) return null;
     return (
@@ -585,8 +585,8 @@ const RigLayers: React.FC<RigLayersProps> = ({
   return (
     <HoistedDefsProvider>
       <SpriteDefs body={body} />
-      {makeClippingGroups(clippingGroups)}
-      {makeClippingOutlineMasks(clippingGroups)}
+      {makeMaskGroups(maskGroups)}
+      {makeClippingOutlineMasks(maskGroups)}
       {makeTrueClipOutlineMasks(trueClipGroups)}
       {makeTrueClipFillMasks(trueClipGroups)}
       <TrueClipDefs trueClipGroups={trueClipGroups} scopeId={scopeId} />
