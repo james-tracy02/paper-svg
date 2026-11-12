@@ -296,7 +296,7 @@
 </path>
 </defs>
 <defs>
-<mask id="fixture_hair_group_no_outline" x="-48.06142807006836" y="-220.53578186035156" width="95.59053039550781" height="103.03350067138672" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_hair_group_no_outline" x="-51.282137801614965" y="-220.5577726721483" width="102.03193609067411" height="103.06083311000523" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_uqv44d" transform="matrix(0.903, -0.0061, 0.0061, 0.903, -0.2772, -177.2445) matrix(1.3184, 0, 0, 1.28, 0, 1.8) matrix(1, 0, 0, 1, -99.5973, -129.6369)" fill="white" stroke="black" style="stroke-width: calc(1px * var(--zoom, 1));">
 </use>
@@ -322,7 +322,7 @@
 </g>
 </g>
 </mask>
-<mask id="fixture_clothing_group_no_outline" x="-119.88750457763672" y="-166.5204620361328" width="239.77500915527344" height="256.69183349609375" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_clothing_group_no_outline" x="-119.88736" y="-166.52046784" width="239.77472" height="256.692669845" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <rect transform="matrix(1.1013, -0.1707, 0.1328, 0.7537, -24.8668, -119.2253) matrix(1, 0, 0, 1, -5, 5)" fill="white" x="-5" y="-5" width="10" height="10" stroke="black" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
 </rect>
@@ -484,7 +484,7 @@
 </g>
 </g>
 </mask>
-<mask id="fixture_tights_group_no_outline" x="-119.88736" y="-32.190340000000006" width="239.77472" height="61.09424" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_tights_group_no_outline" x="-119.88736" y="-31.968385696000002" width="239.77472" height="60.872285696000006" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <g mask="url(#fixture_body_clip_mask)">
 <g transform="matrix(2.7472, 0, 0, 1.1352, 0, -4.9353) matrix(0.35, 0, 0, 0.8, 0, 0) matrix(1, 0, 0, 1, -54.5469, -19.0468)" style="stroke-width: calc(1px * var(--zoom, 1));">
@@ -500,7 +500,7 @@
 </g>
 </g>
 </mask>
-<mask id="fixture_shirtLower_group_no_outline" x="-55.86814880371094" y="-70.50460052490234" width="111.73629760742188" height="88.03199005126953" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_shirtLower_group_no_outline" x="-55.86723764" y="-70.5046" width="111.73447528" height="88.03199279999998" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <path transform="matrix(0.7571, 0, 0, 0.7757, 0, -52.7476) matrix(1, 0, 0, 1, 0, 0)" d="M 30 -10 Q 42.584 20.79 60.584 62.68 Q 31.804 74.704 13.512 77.704 L 0 56.6787 Q -4.503 65.0199 -13.512 77.704 Q -31.804 74.704 -60.584 62.68 Q -42.584 20.79 -30 -10 Z" fill="white" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </path>
@@ -508,7 +508,7 @@
 </path>
 </g>
 </mask>
-<mask id="fixture_vestLower_group_no_outline" x="-61.013397216796875" y="-70.50460052490234" width="122.02679443359375" height="95.09066772460938" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_vestLower_group_no_outline" x="-61.012387299999986" y="-70.5046" width="122.02477459999997" height="98.11686849999998" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <path transform="matrix(0.7571, 0, 0, 0.7757, 0, -52.7476) matrix(1, 0, 0, 1, 0, 0)" d="M 30 -10 Q 49.38 32.175 67.38 75.1 C 30.68 90.705 -30.68 90.705 -67.38 75.1 Q -49.38 32.175 -30 -10 Z" fill="white" stroke="black" vector-effect="non-scaling-stroke" style="stroke-width: calc(2px * var(--zoom, 1));">
 </path>
@@ -516,7 +516,7 @@
 </path>
 </g>
 </mask>
-<mask id="fixture_head_eyes_group_no_outline" x="-37.894676208496094" y="-207.46705627441406" width="75.44762420654297" height="89.96477508544922" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_head_eyes_group_no_outline" x="-38.541339857713695" y="-213.5787623816932" width="76.71153078302545" height="96.08182281955013" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <path transform="matrix(0.8037, -0.0054, 0.0054, 0.8037, 0.011, -134.7322) matrix(2, 0, 0, 2, 0, -37.7)" d="M 17.0328 -8.664 C 17.4898 -2.148 15.6655 5.6098 14.7184 10.417 C 13.9989 14.0689 11.6637 17.1385 9.2952 18.8306 C 6.9559 20.5018 2.0479 23.233 0 23.233 C -2.0479 23.233 -6.9559 20.5018 -9.2952 18.8306 C -11.6637 17.1385 -14.0457 14.0778 -14.7184 10.417 C -15.6039 5.5981 -17.4745 -2.1469 -17.0328 -8.664 C -16.0026 -23.865 15.9668 -23.8626 17.0328 -8.664 Z" fill="white" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </path>
@@ -524,7 +524,7 @@
 </path>
 </g>
 </mask>
-<mask id="fixture_mouth_group_no_outline" x="-13.770239125986208" y="-148.42376406813358" width="27.518665215590254" height="20.91780208933295" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_mouth_group_no_outline" x="-13.777886284003912" y="-148.45428014544476" width="27.533304049687683" height="20.980182383476148" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <g transform="matrix(-0.903, 0.0061, 0.0061, 0.903, -0.0109, -137.9649) matrix(0.16, 0, 0, 0.16, 0, 0) matrix(1, 0, 0, 1, -26.2969, -3.4609)" style="stroke-width: calc(0.67px * var(--zoom, 1));">
 <use href="#sym_1gbewxa" fill="none" stroke="transparent">
@@ -542,7 +542,7 @@
 </rect>
 </g>
 </mask>
-<mask id="fixture_body_clip_mask_outline" x="-62.65781339508935" y="-166.6576" width="125.3156267901787" height="315.96863232626083" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_body_clip_mask_outline" x="-66.09506352760519" y="-166.52046784" width="132.19012705521038" height="316.4455071481532" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_14dgp4p" transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358) matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="black" opacity="0" style="stroke-width: calc((3px + 0.5 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </use>
@@ -612,7 +612,7 @@
 </rect>
 </g>
 </mask>
-<mask id="fixture_body_clip_mask" x="-62.65781339508935" y="-166.6576" width="125.3156267901787" height="315.96863232626083" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_body_clip_mask" x="-66.09506352760519" y="-166.52046784" width="132.19012705521038" height="316.4455071481532" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_14dgp4p" transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358) matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="white" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </use>
@@ -674,7 +674,7 @@
 </g>
 </g>
 </mask>
-<mask id="fixture_body_clip_mask_no_outline" x="-62.65781339508935" y="-166.6576" width="125.3156267901787" height="315.96863232626083" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_body_clip_mask_no_outline" x="-66.09506352760519" y="-166.52046784" width="132.19012705521038" height="316.4455071481532" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_14dgp4p" transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358) matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="white" style="stroke-width: calc(3px * var(--zoom, 1));">
 </use>
@@ -742,7 +742,7 @@
 </rect>
 </g>
 </mask>
-<mask id="fixture_lowerBody_clip_mask" x="-58.0788" y="-76.94291" width="116.1576" height="120.94497" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_lowerBody_clip_mask" x="-58.00247757711999" y="-77.623493666" width="116.00941121156" height="122.185093746" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_14dgp4p" transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358) matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="white" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </use>
@@ -772,7 +772,7 @@
 </g>
 </g>
 </mask>
-<mask id="fixture_lowerBody_clip_mask_no_outline" x="-58.0788" y="-76.94291" width="116.1576" height="120.94497" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_lowerBody_clip_mask_no_outline" x="-58.00247757711999" y="-77.623493666" width="116.00941121156" height="122.185093746" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <use href="#sym_14dgp4p" transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358) matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="white" style="stroke-width: calc(3px * var(--zoom, 1));">
 </use>
@@ -1009,7 +1009,7 @@
 <rect transform="matrix(2.2, 0, 0, 1, 0, 1.4)" fill="none" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </rect>
 </g>
-<mask id="fixture_arm_joint_right_outline_mask" x="-59.95" y="-130.0811099804661" width="119.9" height="260.1622199609322" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_arm_joint_right_outline_mask" x="-59.95" y="-150.26221996093216" width="119.9" height="300.5244399218643" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <rect transform="matrix(9.99, 8.0724, 0, 19.98, 0, 0)" fill="white" x="-5" y="-5" width="10" height="10" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </rect>
@@ -1031,7 +1031,7 @@
 <rect transform="matrix(1, 0, 0, 1, 5, -5)" fill="#001529" x="-5" y="-5" width="10" height="10" style="cursor: grab;">
 </rect>
 </g>
-<mask id="fixture_arm_joint_right_mask" x="-60" y="-130.20131129175783" width="120" height="260.40262258351567" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_arm_joint_right_mask" x="-60" y="-150.40262258351567" width="120" height="300.80524516703133" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <rect transform="matrix(10, 8.0805, 0, 20, 0, 0)" fill="white" x="-5" y="-5" width="10" height="10" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </rect>
@@ -1057,7 +1057,7 @@
 <rect transform="matrix(-2.2, 0, 0, 1, 0, 1.4)" fill="none" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </rect>
 </g>
-<mask id="fixture_arm_joint_left_outline_mask" x="-59.95" y="-130.0811099804661" width="119.9" height="260.1622199609322" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_arm_joint_left_outline_mask" x="-59.95" y="-150.26221996093216" width="119.9" height="300.5244399218643" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <rect transform="matrix(-9.99, 8.0724, 0, 19.98, 0, 0)" fill="white" x="-5" y="-5" width="10" height="10" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </rect>
@@ -1079,7 +1079,7 @@
 <rect transform="matrix(-1, 0, 0, 1, -5, -5)" fill="#001529" x="-5" y="-5" width="10" height="10" style="cursor: grab;">
 </rect>
 </g>
-<mask id="fixture_arm_joint_left_mask" x="-60" y="-130.20131129175783" width="120" height="260.40262258351567" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+<mask id="fixture_arm_joint_left_mask" x="-60" y="-150.40262258351567" width="120" height="300.80524516703133" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
 <g>
 <rect transform="matrix(-10, 8.0805, 0, 20, 0, 0)" fill="white" x="-5" y="-5" width="10" height="10" stroke="white" vector-effect="non-scaling-stroke" style="stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </rect>

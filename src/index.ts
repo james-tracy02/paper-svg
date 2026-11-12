@@ -6,6 +6,8 @@ export type { Color, Vector2 } from "./types/primitives";
 
 /* ---- core types ---- */
 export type { Node } from "./types/Node";
+export type { DriverOutput, NodeDriver } from "./types/Driver";
+export type { Pose } from "./types/Pose";
 export type {
   Sprite,
   Shape,
@@ -29,7 +31,6 @@ export { default as SpriteBuilder } from "./types/SpriteBuilder";
 
 /* ---- render tree (headless) ---- */
 export {
-  buildRenderTree,
   flattenRenderTree,
   getRenderNodes,
   buildMaskSignature,
@@ -58,7 +59,7 @@ export type { SpritePlacement } from "./sprites/loader";
 
 /* ---- React renderer ---- */
 export { default as Rig } from "./render/Rig";
-export type { RigProps, RigEffects, GlowConfig, TintConfig } from "./render/Rig";
+export type { RigProps, RigHandle, RigEffects, GlowConfig, TintConfig } from "./render/Rig";
 export { default as RigLayers } from "./render/RigLayers";
 export type { RigLayersProps, RigNodeInteraction } from "./render/RigLayers";
 export { useRenderNodes } from "./render/useRenderNodes";

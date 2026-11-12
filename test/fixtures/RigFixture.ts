@@ -5,8 +5,11 @@ import type { Node, RenderGroupOptions, RigEffects } from "../../src";
  * in the dev console (project-k/src/dev/rigFixture.ts), saved here as `<name>.rig.json`.
  */
 export type RigFixture = {
-  /** 1: exported against paper-svg 0.1.x, with the old mask/clip field names (see `upgradeFixture`). */
-  version: 1 | 2;
+  /**
+   * 1: exported against paper-svg 0.1.x, with the old mask/clip field names. 2: flat `Node` fields,
+   * before 0.3 grouped them. 3: current. See `upgradeFixture`.
+   */
+  version: 1 | 2 | 3;
   name: string;
   body: Node;
   scale: number;
@@ -38,8 +41,62 @@ const upgradeV1Node = (node: Record<string, unknown>): Node => {
   return upgraded as Node;
 };
 
-/** Brings an exported fixture up to the current `Node` field names. */
-export const upgradeFixture = (fixture: RigFixture): RigFixture =>
-  fixture.version === 1
-    ? { ...fixture, version: 2, body: upgradeV1Node(fixture.body as unknown as Record<string, unknown>) }
-    : fixture;
+/** Version 2 (flat) `Node` fields by the group and name they have now. */
+const V2_GROUPS: Record<string, [group: string, name: string]> = {
+  translate: ["transform", "translate"],
+  scale: ["transform", "scale"],
+  rotate: ["transform", "rotate"],
+  skew: ["transform", "skew"],
+  matrix: ["transform", "matrix"],
+  fixedRotation: ["follow", "fixedRotation"],
+  fixedScale: ["follow", "fixedScale"],
+  aimAt: ["follow", "aimAt"],
+  pinTo: ["follow", "pinTo"],
+  noSprite: ["paint", "noSprite"],
+  mask: ["paint", "mask"],
+  clip: ["paint", "clip"],
+  opacity: ["paint", "opacity"],
+  blendMode: ["paint", "blendMode"],
+  patternSpace: ["paint", "patternSpace"],
+  gradientSpace: ["paint", "gradientSpace"],
+  renderGroup: ["paint", "renderGroup"],
+  renderGroupTag: ["paint", "renderGroupTag"],
+  outlineZIndex: ["outline", "zIndex"],
+  maskOutline: ["outline", "masked"],
+  disableOutlineHoisting: ["outline", "disableHoisting"],
+  articulated: ["interaction", "articulated"],
+  pointerEvents: ["interaction", "pointerEvents"],
+  pointerEventsTarget: ["interaction", "target"],
+};
+/** Version 2 fields nothing reads any more. */
+const V2_DROPPED = new Set(["fixedSize", "fixedSkew"]);
+
+const upgradeV2Node = (node: Record<string, unknown>): Node => {
+  const upgraded: Record<string, Record<string, unknown> | unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (V2_DROPPED.has(key) || value === undefined) continue;
+    const grouped = V2_GROUPS[key];
+    if (!grouped) {
+      upgraded[key] = value;
+      continue;
+    }
+    const [group, name] = grouped;
+    ((upgraded[group] ??= {}) as Record<string, unknown>)[name] = value;
+  }
+  const children = (list: unknown) => (list as Record<string, unknown>[] | undefined)?.map(upgradeV2Node);
+  if (node.joints) upgraded.joints = children(node.joints);
+  if (node.attachments) upgraded.attachments = children(node.attachments);
+  return upgraded as Node;
+};
+
+/** Brings an exported fixture up to the current `Node` shape. */
+export const upgradeFixture = (fixture: RigFixture): RigFixture => {
+  let upgraded = fixture;
+  if (upgraded.version === 1) {
+    upgraded = { ...upgraded, version: 2, body: upgradeV1Node(upgraded.body as unknown as Record<string, unknown>) };
+  }
+  if (upgraded.version === 2) {
+    upgraded = { ...upgraded, version: 3, body: upgradeV2Node(upgraded.body as unknown as Record<string, unknown>) };
+  }
+  return upgraded;
+};

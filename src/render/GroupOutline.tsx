@@ -1,9 +1,11 @@
 import type { Color } from "../types/primitives";
-import React from "react";
+import React, { useContext } from "react";
 import SvgSprite from "./Sprite";
 import SvgSpriteMask from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
+import { PoseBindingsContext } from "./poseBindings";
+import { bindNodeTransform } from "./Group";
 
 export type SvgGroupOutlineProps = {
   g: RenderNode;
@@ -14,7 +16,8 @@ export type SvgGroupOutlineProps = {
 };
 
 const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidth, scopeId, opacity }) => {
-  if (g.noSprite || g.sprite.stroke === "none") return null;
+  const bindings = useContext(PoseBindingsContext);
+  if (g.noSprite || g.hidden || g.sprite.stroke === "none") return null;
 
   const transform = matrixTransformToSvg(g.matrix);
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
@@ -29,6 +32,7 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
   const sprite = (
     <SvgSprite
       id={g.id}
+      poseNode={g.id}
       articulated={false}
       sprite={g.sprite}
       mode={"outer_outline"}
@@ -43,7 +47,10 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
     <>
       {maskId ? <SvgSpriteMask id={maskId} sprite={g.mask!} /> : null}
       {maskId || opacity !== undefined ? (
-        <g transform={transform} mask={maskId ? `url(#${maskId})` : undefined} opacity={outerStyle ? undefined : opacity}>
+        <g
+          ref={bindNodeTransform(bindings, g.id)}
+          transform={transform}
+          mask={maskId ? `url(#${maskId})` : undefined} opacity={outerStyle ? undefined : opacity}>
           {sprite}
         </g>
       ) : (

@@ -1,4 +1,4 @@
-import { Fragment, memo, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useLayoutEffect, useMemo, type ReactNode } from "react";
 import type { Node } from "../types/Node";
 import type { Color } from "../types/primitives";
 import type { RenderGroupOptions } from "../types/RenderGroup";
@@ -8,10 +8,12 @@ import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
-import { createNodeInterner } from "./stableNodes";
 import { wrapWith } from "./fillWrappers";
 import { HoistedDefsProvider } from "./HoistedDefs";
-import { planLayers, resolveVisibleNodes, type MaskDef, type PaintItem } from "./layerPlan";
+import { planLayers, resolveVisibleNodes, type ClipGroup, type MaskDef, type PaintItem } from "./layerPlan";
+import { getPosedRig } from "./useRenderNodes";
+import { PoseBindingsContext } from "./poseBindings";
+import type { LivePoser } from "./livePose";
 
 /** Overrides how one node responds to the pointer. */
 export type RigNodeInteraction = {
@@ -26,7 +28,10 @@ export type RigNodeInteraction = {
 export type RigLayersProps = {
   /** Root of the node tree. Sprite definitions are collected from it. */
   body: Node;
-  /** The tree's render nodes, sorted by zIndex (see useRenderNodes). */
+  /**
+   * The tree's render nodes, sorted by zIndex. From `useRenderNodes`, the layers are planned once per
+   * tree and a pose change only re-renders the nodes it moved.
+   */
   nodes: RenderNode[];
   /** Prefixes a generated SVG id, so several rigs can share a document. */
   scopeId: (suffix: string) => string;
@@ -41,6 +46,8 @@ export type RigLayersProps = {
   outerOutline?: { color: Color; thickness: number };
   /** Return true to paint a node at zero opacity. */
   isHidden?: (node: RenderNode) => boolean;
+  /** Lets poses be written to the DOM without a render (see `RigHandle.setPose`). */
+  livePose?: LivePoser;
 };
 
 const noRenderGroupOptions = () => undefined;
@@ -56,7 +63,9 @@ const withPointerEvents = (g: RenderNode, pointerEvents: boolean): RenderNode =>
   return (variants[key] ??= { ...g, pointerEvents });
 };
 
-const renderMaskDefs = (defs: MaskDef[]) =>
+const sameNode = (node: RenderNode) => node;
+
+const renderMaskDefs = (defs: MaskDef[], current: (node: RenderNode) => RenderNode) =>
   defs.length ? (
     <defs>
       {defs.map((def) => (
@@ -64,7 +73,7 @@ const renderMaskDefs = (defs: MaskDef[]) =>
           key={def.key}
           id={def.id}
           groupName={def.groupName}
-          groups={def.nodes}
+          groups={def.nodes.map(current)}
           mode={def.mode}
           withFill={def.withFill}
           withNoOutline={def.withNoOutline}
@@ -90,16 +99,40 @@ const RigLayers: React.FC<RigLayersProps> = ({
   resolveInteraction,
   outerOutline,
   isHidden,
+  livePose,
 }) => {
-  // Unchanged nodes keep their identity across rebuilds, so memoized groups skip re-rendering.
-  const [intern] = useState(createNodeInterner);
-  const visibleNodes = useMemo(() => intern(resolveVisibleNodes(nodes)), [nodes, intern]);
+  // Nodes from useRenderNodes come with a layout: the plan is made from it once per tree, and each node
+  // in the plan is swapped for its posed version when painted.
+  const posed = getPosedRig(nodes);
+  const current = posed?.current ?? sameNode;
+  const planNodes = posed?.layout.nodes ?? nodes;
+  const visibleNodes = useMemo(
+    () => posed?.layout.visibleNodes ?? resolveVisibleNodes(planNodes),
+    // `posed` changes with every pose; its layout only with the tree, which `planNodes` follows.
+    [planNodes],
+  );
   const plan = useMemo(
-    () => planLayers({ nodes, visibleNodes, getRenderGroupOptions, scopeId }),
-    [nodes, visibleNodes, getRenderGroupOptions, scopeId],
+    () => planLayers({ nodes: planNodes, visibleNodes, getRenderGroupOptions, scopeId }),
+    [planNodes, visibleNodes, getRenderGroupOptions, scopeId],
+  );
+  const clipGroups = useMemo(
+    () =>
+      posed
+        ? new Map<string, ClipGroup>(
+            [...plan.defs.clipGroups].map(([name, group]) => [
+              name,
+              { ...group, groups: group.groups.map((member) => ({ ...member, node: current(member.node) })) },
+            ]),
+          )
+        : plan.defs.clipGroups,
+    [plan, posed, current],
   );
 
-  const renderNode = (g: RenderNode, layer: "fill" | "maskOutline", skipFillWrappers?: boolean) => {
+  // After each commit the DOM shows these nodes again, wherever a written pose had moved them.
+  useLayoutEffect(() => livePose?.committed(posed), [livePose, posed]);
+
+  const renderNode = (planned: RenderNode, layer: "fill" | "maskOutline", skipFillWrappers?: boolean) => {
+    const g = current(planned);
     const isClipped = g.pointerEvents !== true && Boolean(g.maskedBy?.length || g.clippedBy?.length);
     const interaction = resolveInteraction?.(g);
     const pointerEvents = interaction?.pointerEvents ?? (isClipped ? false : undefined);
@@ -153,27 +186,29 @@ const RigLayers: React.FC<RigLayersProps> = ({
   };
 
   return (
-    <HoistedDefsProvider>
-      <SpriteDefs body={body} />
-      {renderMaskDefs(plan.defs.maskFills)}
-      {renderMaskDefs(plan.defs.maskOutlines)}
-      {renderMaskDefs(plan.defs.clipOutlines)}
-      {renderMaskDefs(plan.defs.clipFills)}
-      <ClipPathDefs clipGroups={plan.defs.clipGroups} scopeId={scopeId} />
-      {outerOutline
-        ? plan.outerOutlines.map((g) => (
-            <SvgGroupOutline
-              key={`outer_${g.id}`}
-              g={g}
-              stroke={outerOutline.color}
-              strokeWidth={outerOutline.thickness}
-              scopeId={scopeId}
-              opacity={isHidden?.(g) ? 0 : g.opacity}
-            />
-          ))
-        : null}
-      {plan.items.map(renderItem)}
-    </HoistedDefsProvider>
+    <PoseBindingsContext.Provider value={livePose?.bindings ?? null}>
+      <HoistedDefsProvider>
+        <SpriteDefs body={body} nodes={posed?.nodes} />
+        {renderMaskDefs(plan.defs.maskFills, current)}
+        {renderMaskDefs(plan.defs.maskOutlines, current)}
+        {renderMaskDefs(plan.defs.clipOutlines, current)}
+        {renderMaskDefs(plan.defs.clipFills, current)}
+        <ClipPathDefs clipGroups={clipGroups} scopeId={scopeId} />
+        {outerOutline
+          ? plan.outerOutlines.map(current).map((g) => (
+              <SvgGroupOutline
+                key={`outer_${g.id}`}
+                g={g}
+                stroke={outerOutline.color}
+                strokeWidth={outerOutline.thickness}
+                scopeId={scopeId}
+                opacity={isHidden?.(g) ? 0 : g.opacity}
+              />
+            ))
+          : null}
+        {plan.items.map(renderItem)}
+      </HoistedDefsProvider>
+    </PoseBindingsContext.Provider>
   );
 };
 

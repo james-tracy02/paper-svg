@@ -1,8 +1,31 @@
-import React from "react";
+import React, { useContext } from "react";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import type { Sprite } from "../types/Sprite";
 import { outsetPathData } from "./outsetPath";
 import type { ClipGroup } from "./layerPlan";
+import type { RenderNode } from "./RenderTree";
+import { bindPose, PoseBindingsContext, prefixWriter, setAttr, type PoseBindings } from "./poseBindings";
+
+const CLIP_PRECISION = 3;
+const clipNodeTransform = (node: RenderNode) => matrixTransformToSvg(node.matrix, CLIP_PRECISION);
+
+/** Ref callback factory for a clip shape of `node`: its transform as rendered, and its path if driven. */
+type BindClip = (
+  rendered: string,
+  path?: (node: RenderNode) => string | undefined,
+) => ((element: Element | null) => void) | undefined;
+
+const clipBinder =
+  (bindings: PoseBindings | null, node: RenderNode): BindClip =>
+  (rendered, path) =>
+    bindPose<Element>(bindings, node.id, (element) => {
+      const writeTransform = prefixWriter(node.id, "transform", clipNodeTransform(node), rendered, clipNodeTransform)(element);
+      return (get) => {
+        writeTransform(get);
+        const posed = path && get(node.id);
+        if (posed) setAttr(element, "d", path(posed));
+      };
+    });
 
 /**
  * Render a bare shape element for use inside <clipPath>.
@@ -18,7 +41,8 @@ const renderClipElement = (
   nodeTransform: string,
   spriteTransform: string,
   key: string,
-  outset?: number,
+  outset: number | undefined,
+  bind: BindClip,
 ) => {
   const combinedTransform = `${nodeTransform} ${spriteTransform}`;
   const shape = sprite.shape ?? "ellipse";
@@ -34,26 +58,35 @@ const renderClipElement = (
       if (!resolvedFill || resolvedFill === "none") return null;
       const t = [combinedTransform, customRootTransform, el.transform].filter(Boolean).join(" ");
       const d = outset != null ? outsetPathData(el.d, outset) : el.d;
-      return <path key={`${key}_${i}`} d={d} transform={t} />;
+      return <path key={`${key}_${i}`} ref={bind(t)} d={d} transform={t} />;
     });
   }
   if (sprite.dynamicPath) {
-    const d = outset != null ? outsetPathData(sprite.dynamicPath, outset) : sprite.dynamicPath;
-    return <path key={key} d={d} transform={combinedTransform} />;
+    const outsetPath = (path: string) => (outset != null ? outsetPathData(path, outset) : path);
+    const drivenPath = (node: RenderNode) => node.sprite.dynamicPath && outsetPath(node.sprite.dynamicPath);
+    return (
+      <path
+        key={key}
+        ref={bind(combinedTransform, drivenPath)}
+        d={outsetPath(sprite.dynamicPath)}
+        transform={combinedTransform}
+      />
+    );
   }
   if (!sprite.fill || sprite.fill === "none") return null;
-  if (shape === "rect") return <rect key={key} x={-5} y={-5} width={10} height={10} transform={combinedTransform} />;
+  if (shape === "rect") return <rect key={key} ref={bind(combinedTransform)} x={-5} y={-5} width={10} height={10} transform={combinedTransform} />;
   if (shape === "half_circle")
     return (
       <path
         key={key}
+        ref={bind(combinedTransform)}
         d="M -5 0 A 5 5 0 0 0 5 0 L -5 0 Z"
         transform={combinedTransform}
       />
     );
   if (shape === "line")
-    return <line key={key} x1={0} y1={-5} x2={0} y2={5} strokeWidth={1} stroke="black" transform={combinedTransform} />;
-  return <ellipse key={key} rx={5} ry={5} transform={combinedTransform} />;
+    return <line key={key} ref={bind(combinedTransform)} x1={0} y1={-5} x2={0} y2={5} strokeWidth={1} stroke="black" transform={combinedTransform} />;
+  return <ellipse key={key} ref={bind(combinedTransform)} rx={5} ry={5} transform={combinedTransform} />;
 };
 
 type ClipPathDefsProps = {
@@ -62,6 +95,7 @@ type ClipPathDefsProps = {
 };
 
 const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
+  const bindings = useContext(PoseBindingsContext);
   if (clipGroups.size === 0) return null;
 
   return (
@@ -72,10 +106,17 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
           <clipPath key={clipId} id={clipId} clipPathUnits="userSpaceOnUse">
             {clipGroup.groups.map((member) => {
               const group = member.node;
-              if (group.noSprite) return null;
-              const nodeTransform = matrixTransformToSvg(group.matrix, 3);
-              const spriteTransform = getSpriteTransform(group.sprite, 3);
-              return renderClipElement(group.sprite, nodeTransform, spriteTransform, group.id, member.outset);
+              if (group.noSprite || group.hidden) return null;
+              const nodeTransform = clipNodeTransform(group);
+              const spriteTransform = getSpriteTransform(group.sprite, CLIP_PRECISION);
+              return renderClipElement(
+                group.sprite,
+                nodeTransform,
+                spriteTransform,
+                group.id,
+                member.outset,
+                clipBinder(bindings, group),
+              );
             })}
           </clipPath>
         );

@@ -1,18 +1,33 @@
 import type { RenderNode } from "./RenderTree";
-import type { Sprite } from "../types/Sprite";
 import SvgSprite from "./Sprite";
 import SvgSpriteMask from "./SpriteMask";
-import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { combineMatrixTransforms, matrixTransformToSvg, transformToMatrixWithMatrix } from "./transform";
+import React, { useContext, useMemo } from "react";
+import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
 import { getSpriteSignature } from "./utils/getSpriteSignature";
-import {
-  maskBoundsCache,
-  areBoundsEqual,
-  serializeMatrixTransform,
-  expandBounds,
-  type Bounds,
-} from "./maskBoundsCache";
+import { getMaskRegion, type Bounds } from "./spriteBounds";
+import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
+import { bindNodeTransform } from "./Group";
+
+/** A mask's region attributes: its members' bounds, or the default region when they have none. */
+const maskAttributesFor = (bounds: Bounds | null) =>
+  bounds
+    ? {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        maskUnits: "userSpaceOnUse" as const,
+        maskContentUnits: "userSpaceOnUse" as const,
+      }
+    : {
+        x: maskProps.x,
+        y: maskProps.y,
+        width: maskProps.width,
+        height: maskProps.height,
+        maskUnits: undefined,
+        maskContentUnits: "userSpaceOnUse" as const,
+      };
 
 type MaskProps = {
   id: string;
@@ -34,93 +49,12 @@ type MaskProps = {
   withNoOutline?: boolean;
 };
 
-const getGroupGeometryKey = (group: RenderNode) => {
-  const transformKey = serializeMatrixTransform(group.matrix);
-  const outsetKey = group.maskOutsets ? JSON.stringify(group.maskOutsets) : "";
-  return `${group.id}:${getSpriteSignature(group.sprite)}:${transformKey}:${outsetKey}`;
-};
-
 const getGroupMaskSignature = (group: RenderNode) => {
   const maskSprite = group.mask;
   if (!maskSprite) {
     return `${group.id}:none`;
   }
   return `${group.id}:${getSpriteSignature(maskSprite)}`;
-};
-
-const padding = 10;
-
-const MEASURE_DEFER_MS = 80;
-
-const SHAPE_BASE_SCALE = 10;
-
-const getSpriteLocalBounds = (sprite: Sprite): Bounds | null => {
-  if (sprite.customSprite?.bounds) {
-    const size = sprite.customSprite.size;
-    if (size) {
-      return { x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height };
-    }
-    const b = sprite.customSprite.bounds;
-    return { x: b.x, y: -(b.y + b.height), width: b.width, height: b.height };
-  }
-  if (!sprite.shape && !sprite.href) {
-    return null;
-  }
-  switch (sprite.shape ?? "ellipse") {
-    case "ellipse":
-    case "rect":
-    case "soft":
-    case "fuzzy":
-      return { x: -SHAPE_BASE_SCALE / 2, y: -SHAPE_BASE_SCALE / 2, width: SHAPE_BASE_SCALE, height: SHAPE_BASE_SCALE };
-    case "half_circle":
-      return {
-        x: -SHAPE_BASE_SCALE / 2,
-        y: -SHAPE_BASE_SCALE / 2,
-        width: SHAPE_BASE_SCALE,
-        height: SHAPE_BASE_SCALE / 2,
-      };
-    case "line":
-      return { x: 0, y: -SHAPE_BASE_SCALE / 2, width: 0, height: SHAPE_BASE_SCALE };
-    default:
-      return null;
-  }
-};
-
-const applyMatrixToBounds = (
-  bounds: Bounds,
-  transform: { matrix: { a: number; b: number; c: number; d: number }; translate: { x: number; y: number } },
-) => {
-  const { a, b, c, d } = transform.matrix;
-  const { x: tx } = transform.translate;
-  const ty = -transform.translate.y;
-  const x1 = bounds.x;
-  const y1 = bounds.y;
-  const x2 = bounds.x + bounds.width;
-  const y2 = bounds.y + bounds.height;
-  const points = [
-    { x: a * x1 + c * y1 + tx, y: b * x1 + d * y1 + ty },
-    { x: a * x2 + c * y1 + tx, y: b * x2 + d * y1 + ty },
-    { x: a * x1 + c * y2 + tx, y: b * x1 + d * y2 + ty },
-    { x: a * x2 + c * y2 + tx, y: b * x2 + d * y2 + ty },
-  ];
-  const minX = Math.min(...points.map((p) => p.x));
-  const maxX = Math.max(...points.map((p) => p.x));
-  const minY = Math.min(...points.map((p) => p.y));
-  const maxY = Math.max(...points.map((p) => p.y));
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-};
-
-const getSpriteMatrixForMask = (sprite: Sprite) => {
-  if (sprite.maskScale) {
-    return transformToMatrixWithMatrix({
-      ...sprite,
-      scale: {
-        x: sprite.scale.x * sprite.maskScale.x,
-        y: sprite.scale.y * sprite.maskScale.y,
-      },
-    });
-  }
-  return transformToMatrixWithMatrix(sprite);
 };
 
 const SvgMask: React.FC<MaskProps> = ({
@@ -132,9 +66,7 @@ const SvgMask: React.FC<MaskProps> = ({
   withFill = true,
   withNoOutline = true,
 }) => {
-  const contentRef = useRef<SVGGElement | null>(null);
-  const timeoutRef = useRef<number | null>(null);
-  const fallbackLoggedRef = useRef(false);
+  const bindings = useContext(PoseBindingsContext);
   const uniqueGroups = useMemo(() => {
     const seen = new Set<string>();
     return groups.filter((group) => {
@@ -143,109 +75,8 @@ const SvgMask: React.FC<MaskProps> = ({
       return true;
     });
   }, [groups]);
-  const geometrySignature = useMemo(() => uniqueGroups.map(getGroupGeometryKey).join("||"), [uniqueGroups]);
-  const [bounds, setBounds] = useState<Bounds | null>(() => maskBoundsCache.get(id)?.bounds ?? null);
-
-  useLayoutEffect(() => {
-    const cached = maskBoundsCache.get(id);
-    if (cached && cached.signature === geometrySignature) {
-      setBounds((prev) => (prev && areBoundsEqual(prev, cached.bounds) ? prev : cached.bounds));
-      return;
-    }
-
-    let raf: number | null = null;
-
-    const computeBoundsFromSprites = (): Bounds | null => {
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (const group of uniqueGroups) {
-        if (group.noSprite) continue;
-        const localBounds = getSpriteLocalBounds(group.sprite);
-        if (!localBounds) {
-          return null;
-        }
-        const spriteMatrix = getSpriteMatrixForMask(group.sprite);
-        const worldMatrix = combineMatrixTransforms(group.matrix, spriteMatrix);
-        const worldBounds = expandBounds(
-          applyMatrixToBounds(localBounds, worldMatrix) as DOMRect,
-          Math.max(0, group.maskOutsets?.[groupName] ?? 0),
-        );
-        minX = Math.min(minX, worldBounds.x);
-        minY = Math.min(minY, worldBounds.y);
-        maxX = Math.max(maxX, worldBounds.x + worldBounds.width);
-        maxY = Math.max(maxY, worldBounds.y + worldBounds.height);
-      }
-      if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-        return null;
-      }
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    };
-
-    const measure = () => {
-      const computed = computeBoundsFromSprites();
-      if (computed) {
-        const nextBounds = expandBounds(
-          {
-            x: computed.x,
-            y: computed.y,
-            width: computed.width,
-            height: computed.height,
-          } as DOMRect,
-          padding,
-        );
-        maskBoundsCache.set(id, {
-          signature: geometrySignature,
-          bounds: nextBounds,
-        });
-        setBounds((prev) => (prev && areBoundsEqual(prev, nextBounds) ? prev : nextBounds));
-        return true;
-      }
-      if (!contentRef.current) {
-        return false;
-      }
-      try {
-        const bbox = contentRef.current.getBBox();
-        if (bbox.width === 0 || bbox.height === 0) {
-          return false;
-        }
-        if (!fallbackLoggedRef.current) {
-          fallbackLoggedRef.current = true;
-          console.warn("[mask-bbox-fallback]", { id });
-        }
-        const nextBounds = expandBounds(bbox, padding);
-        maskBoundsCache.set(id, {
-          signature: geometrySignature,
-          bounds: nextBounds,
-        });
-        setBounds((prev) => (prev && areBoundsEqual(prev, nextBounds) ? prev : nextBounds));
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    if (!measure()) {
-      timeoutRef.current = window.setTimeout(() => {
-        raf = requestAnimationFrame(() => {
-          if (!measure()) {
-            // still waiting for geometry; fallback bounds remain
-          }
-        });
-      }, MEASURE_DEFER_MS);
-    }
-
-    return () => {
-      if (timeoutRef.current !== null) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      if (raf !== null) {
-        cancelAnimationFrame(raf);
-      }
-    };
-  }, [geometrySignature, id]);
+  // From the members' geometry where they stand, so it is right on the first render, without measuring.
+  const bounds = useMemo(() => getMaskRegion(uniqueGroups, groupName), [uniqueGroups, groupName]);
 
   const spriteMaskSignature = uniqueGroups.map(getGroupMaskSignature).join("||");
 
@@ -286,10 +117,10 @@ const SvgMask: React.FC<MaskProps> = ({
           )
       : content;
 
-  const renderMaskContents = (mode: "mask" | "outline_mask" | "mask_no_outline", ref?: React.Ref<SVGGElement>) => (
-    <g key={`${id}_${mode}_content`} ref={ref}>
+  const renderMaskContents = (mode: "mask" | "outline_mask" | "mask_no_outline") => (
+    <g key={`${id}_${mode}_content`}>
       {uniqueGroups.map((group) =>
-        group.noSprite ? null : wrapInClipMasks(group, (() => {
+        group.noSprite || group.hidden ? null : wrapInClipMasks(group, (() => {
           // maskGroupModes (positive/negative) control whether a node's shape is
           // included/excluded from the plain fill mask. The outline ring mask must
           // always use its own black-fill/white-stroke ring coloring regardless of
@@ -312,10 +143,16 @@ const SvgMask: React.FC<MaskProps> = ({
               strokeWidthOverride={outset > 0 ? outset * 2 : undefined}
               // A sprite mask is in node space, so only then does the node transform need its own <g>.
               baseTransform={spriteMaskId ? undefined : transform}
+              poseNode={group.id}
             />
           );
           return spriteMaskId ? (
-            <g key={`${group.id}_${mode}`} transform={transform} mask={`url(#${spriteMaskId})`}>
+            <g
+              key={`${group.id}_${mode}`}
+              ref={bindNodeTransform(bindings, group.id)}
+              transform={transform}
+              mask={`url(#${spriteMaskId})`}
+            >
               {sprite}
             </g>
           ) : (
@@ -330,29 +167,18 @@ const SvgMask: React.FC<MaskProps> = ({
     renderMaskContents("outline_mask")
   );
 
-  const maskAttributes: {
-    x: number | string;
-    y: number | string;
-    width: number | string;
-    height: number | string;
-    maskUnits?: "userSpaceOnUse";
-    maskContentUnits: "userSpaceOnUse";
-  } = bounds
-    ? {
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        maskUnits: "userSpaceOnUse",
-        maskContentUnits: "userSpaceOnUse",
-      }
-    : {
-        x: maskProps.x,
-        y: maskProps.y,
-        width: maskProps.width,
-        height: maskProps.height,
-        maskContentUnits: "userSpaceOnUse",
-      };
+  const maskAttributes = maskAttributesFor(bounds);
+  // The region follows the members, so a pose that moves one rewrites it.
+  const memberIds = uniqueGroups.map((group) => group.id);
+  const bindRegion = () =>
+    bindPose<Element>(bindings, memberIds, (element) => (get) => {
+      const region = maskAttributesFor(getMaskRegion(uniqueGroups.map((group) => get(group.id) ?? group), groupName));
+      setAttr(element, "x", region.x);
+      setAttr(element, "y", region.y);
+      setAttr(element, "width", region.width);
+      setAttr(element, "height", region.height);
+      setAttr(element, "maskUnits", region.maskUnits);
+    });
 
   return (
     <>
@@ -362,24 +188,23 @@ const SvgMask: React.FC<MaskProps> = ({
       {mode === "all" || mode === "fill_only" ? (
         <>
           {withFill ? (
-            <mask key={id} id={id} {...maskAttributes}>
-              {renderMaskContents("mask", contentRef)}
+            <mask key={id} ref={bindRegion()} id={id} {...maskAttributes}>
+              {renderMaskContents("mask")}
             </mask>
           ) : null}
           {mode === "all" ? (
-            <mask key={id + "_outline"} id={id + "_outline"} {...maskAttributes}>
+            <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
               {renderOutlineMaskContents()}
             </mask>
           ) : null}
           {withNoOutline ? (
-            <mask key={id + "_no_outline"} id={id + "_no_outline"} {...maskAttributes}>
-              {/* Bounds fallback measures through contentRef, so it moves here when the fill mask is skipped. */}
-              {renderMaskContents("mask_no_outline", withFill ? undefined : contentRef)}
+            <mask key={id + "_no_outline"} ref={bindRegion()} id={id + "_no_outline"} {...maskAttributes}>
+              {renderMaskContents("mask_no_outline")}
             </mask>
           ) : null}
         </>
       ) : (
-        <mask key={id + "_outline"} id={id + "_outline"} {...maskAttributes}>
+        <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
           {renderOutlineMaskContents()}
         </mask>
       )}
@@ -387,7 +212,7 @@ const SvgMask: React.FC<MaskProps> = ({
   );
 };
 
-// Groups arrays are rebuilt every render; members keep identity while unchanged (see stableNodes.ts).
+// Groups arrays are rebuilt every render; members keep identity while a pose leaves them in place (see posedRig.ts).
 const areEqual = (a: MaskProps, b: MaskProps) =>
   a.id === b.id &&
   a.groupName === b.groupName &&

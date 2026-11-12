@@ -3,13 +3,14 @@
  * Profiling page: renders a fixture with Rig and exposes `window.bench`, which bench/profile.mjs
  * drives under a Chrome trace. Each action renders synchronously and resolves after the frame paints.
  */
-import { Profiler, useState, type CSSProperties } from "react";
+import { Profiler, createRef, useState, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { getRenderNodes, getZoomVars, Rig, type Node } from "paper-svg";
+import { getRenderNodes, getZoomVars, Rig, type Node, type Pose, type RigHandle } from "paper-svg";
 import { buildMaskSignature } from "../src/render/RenderTree";
-import { createNodeInterner } from "../src/render/stableNodes";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
+import { createRig, solvePose } from "../src/render/pose";
+import { createRigLayout, createRigPoser } from "../src/render/posedRig";
 import { upgradeFixture, type RigFixture } from "../test/fixtures/RigFixture";
 import exported from "../test/fixtures/sooz.rig.json";
 
@@ -21,14 +22,15 @@ const VIEW = { x: -147, y: -287, width: 294, height: 592 };
 const rebuildWithRotation = (node: Node, id: string, degrees: number): Node => ({
   ...node,
   sprite: { ...node.sprite },
-  rotate: node.id === id ? node.rotate + degrees : node.rotate,
+  transform: { ...node.transform, rotate: node.id === id ? node.transform.rotate + degrees : node.transform.rotate },
   joints: node.joints?.map((child) => rebuildWithRotation(child, id, degrees)),
   attachments: node.attachments?.map((child) => rebuildWithRotation(child, id, degrees)),
 });
 
-type State = { body: Node; zoom: number; tick: number };
+type State = { body: Node; pose?: Pose; zoom: number; tick: number };
 let setState: (update: (state: State) => State) => void = () => {};
 const commits: number[] = [];
+const rigRef = createRef<RigHandle>();
 
 const App = () => {
   const [state, set] = useState<State>({ body: fixture.body, zoom: PIXELS_PER_UNIT, tick: 0 });
@@ -44,7 +46,9 @@ const App = () => {
     >
       <Profiler id="rig" onRender={(_id, _phase, actualDuration) => commits.push(actualDuration)}>
         <Rig
+          ref={rigRef}
           body={state.body}
+          pose={state.pose}
           scale={fixture.scale}
           mirror={fixture.mirror}
           idPrefix="bench"
@@ -79,24 +83,50 @@ const bench = {
   },
   bodies: [] as Node[],
   pose: (index: number) => update((state) => ({ ...state, body: bench.bodies[index] })),
+  /** Turns `joints` by `index + 1` degrees each through the pose prop, on the unchanged body. */
+  posePose: (index: number, joints: string[]) =>
+    update((state) => ({
+      ...state,
+      body: fixture.body,
+      pose: { rotations: Object.fromEntries(joints.map((id) => [id, index + 1])) },
+    })),
+  /** Turns `joints` by `index + 1` degrees each through `setPose`, as a drag would. */
+  setPose: (index: number, joints: string[]) => {
+    rigRef.current!.setPose({ rotations: Object.fromEntries(joints.map((id) => [id, index + 1])) });
+    return nextFrame();
+  },
+  resetPose: () => update((state) => ({ ...state, body: fixture.body, pose: undefined })),
   rerender: () => update((state) => ({ ...state, tick: state.tick + 1 })),
   zoom: (zoom: number) => update((state) => ({ ...state, zoom })),
   takeCommits: () => commits.splice(0),
   settle: () => new Promise((resolve) => setTimeout(resolve, 1000)),
   /** The engine's pure steps on their own, in ms per call. */
   timeSteps(runs: number) {
-    const [a, b] = [rebuildWithRotation(fixture.body, "forearm_right", 1), rebuildWithRotation(fixture.body, "forearm_right", 2)];
+    const a = rebuildWithRotation(fixture.body, "forearm_right", 1);
     const nodes = getRenderNodes(a);
     const sorted = [...nodes].sort((x, y) => x.zIndex - y.zIndex);
     const visible = resolveVisibleNodes(sorted);
-    const intern = createNodeInterner();
-    intern(getRenderNodes(b));
     return {
       buildMaskSignature: time(runs, () => buildMaskSignature(a)),
       getRenderNodes: time(runs, () => getRenderNodes(a)),
-      // Mostly unchanged nodes, as after a pose change: each is compared in full before it is reused.
-      intern: time(runs, () => intern(getRenderNodes(a))) - time(runs, () => getRenderNodes(a)),
       resolveVisibleNodes: time(runs, () => resolveVisibleNodes(sorted)),
+      // A pose change that keeps the draw order: solve, then re-place nodes.
+      poseFrame: (() => {
+        const rig = createRig(fixture.body);
+        const poser = createRigPoser();
+        const layout = createRigLayout(rig);
+        let i = 0;
+        return time(runs, () => poser(layout, solvePose(rig, { rotations: { forearm_right: (i += 1) } })));
+      })(),
+      // A pose change that crosses a z band: a new layout, reusing the last one's unmoved nodes, then planned.
+      relayout: (() => {
+        const rig = createRig(fixture.body);
+        let previous = createRigLayout(rig);
+        return time(runs, () => {
+          const layout = (previous = createRigLayout(rig, undefined, previous));
+          planLayers({ nodes: layout.nodes, visibleNodes: layout.visibleNodes, getRenderGroupOptions, scopeId: (s) => `bench_${s}` });
+        });
+      })(),
       planLayers: time(runs, () =>
         planLayers({ nodes: sorted, visibleNodes: visible, getRenderGroupOptions, scopeId: (s) => `bench_${s}` }),
       ),

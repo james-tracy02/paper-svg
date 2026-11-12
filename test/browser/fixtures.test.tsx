@@ -15,7 +15,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { CSSProperties } from "react";
-import { getZoomVars, makeSprite, registerCustomSprite, Rig, type RigProps } from "../../src";
+import { getZoomVars, makeSprite, NodeBuilder, registerCustomSprite, Rig, SpriteBuilder, type Node, type RigProps } from "../../src";
 import { upgradeFixture, type RigFixture } from "../fixtures/RigFixture";
 import { buildScene, DEFAULT_POSE, STAR_SPRITE_ID, STAR_SVG } from "../../demo/puppet";
 
@@ -97,6 +97,33 @@ const renderRig = async (props: RigProps) => {
   return svg;
 };
 
+/** Renders `first`, lets it settle, then re-renders the same rig with `next`; returns the settled markup. */
+const renderRigMarkup = async (first: RigProps, next?: RigProps) => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  cleanups.push(() => {
+    root.unmount();
+    host.remove();
+  });
+  const draw = (props: RigProps) =>
+    flushSync(() =>
+      root.render(
+        <svg xmlns={SVG_NS} width={800} height={1000} viewBox="-200 -250 400 500" style={getZoomVars(PIXELS_PER_UNIT) as CSSProperties}>
+          <Rig {...props} />
+        </svg>,
+      ),
+    );
+  draw(first);
+  const svg = host.querySelector("svg")!;
+  await settle(svg);
+  if (next) {
+    draw(next);
+    await settle(svg);
+  }
+  return formatMarkup(svg);
+};
+
 /** One element per line, so snapshot diffs point at the element that changed. */
 const formatMarkup = (svg: SVGSVGElement) => svg.outerHTML.replace(/></g, ">\n<") + "\n";
 
@@ -140,6 +167,22 @@ describe("fixtures", () => {
       await expectRigSnapshot(name, fixtureProps(fixture));
     });
 
+    it(`${name} posed through the pose prop draws what a rebuild with the rotations draws`, async () => {
+      const rotations: Record<string, number> = { forearm_right: 35, arm_left: -20, torso: 6, head: -10, leg_right: 12 };
+      const props = fixtureProps(fixture);
+      const withRotations = (node: Node): Node => ({
+        ...node,
+        transform: { ...node.transform, rotate: node.transform.rotate + (rotations[node.id] ?? 0) },
+        joints: node.joints?.map(withRotations),
+        attachments: node.attachments?.map(withRotations),
+      });
+      const rebuilt = await renderRigMarkup({ ...props, body: withRotations(props.body) });
+      expect(rebuilt).not.toEqual(await renderRigMarkup(props));
+      // Posed from the first render, and again after a pose change on the same rig.
+      expect(await renderRigMarkup({ ...props, pose: { rotations } })).toEqual(rebuilt);
+      expect(await renderRigMarkup(props, { ...props, pose: { rotations } })).toEqual(rebuilt);
+    });
+
     it(`${name} with a color transform`, async () => {
       await expectRigSnapshot(`${name}-color-transform`, { ...fixtureProps(fixture), colorTransform: invertColor });
     });
@@ -163,4 +206,83 @@ describe("demo puppet", () => {
       effects: { outerOutline: { color: "#2b6cb0", thickness: 4 }, glow: { color: "#ffe08a", radius: 6 } },
     });
   });
+});
+
+describe("drivers", () => {
+  it("define the paths of a custom sprite a driver swaps in", async () => {
+    const shape = (id: string, d: string) => ({
+      id,
+      colors: 1,
+      strokeColors: 1,
+      elements: [{ d, colorKey: "color0" }],
+      translate: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      rotate: 0,
+    });
+    const open = shape("eye_open", "M 0 0 L 40 0 L 40 30 Z");
+    const closed = shape("eye_closed", "M 0 0 L 40 0 L 20 6 Z");
+    const body = new NodeBuilder("eye")
+      .setSprite(new SpriteBuilder().setCustomSprite(open).setFill("#336699").setStroke("#000000").setStrokeWidth(1).build())
+      .addDriver((p) => ({ customSprite: (p.values?.eyeOpen ?? 1) < 0.2 ? closed : undefined }))
+      .build();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    cleanups.push(() => {
+      root.unmount();
+      host.remove();
+    });
+    flushSync(() =>
+      root.render(
+        <svg xmlns={SVG_NS} width={200} height={200} viewBox="-50 -50 100 100">
+          <Rig body={body} idPrefix="eye" pose={{ values: { eyeOpen: 0.1 } }} />
+        </svg>,
+      ),
+    );
+    const svg = host.querySelector("svg")!;
+    await settle(svg);
+    const refs = [...svg.querySelectorAll("use")].map((use) => use.getAttribute("href") ?? use.getAttribute("xlink:href"));
+    expect(refs.length).toBeGreaterThan(0);
+    for (const ref of refs) expect(svg.querySelector(ref!), `${ref} is defined`).not.toBeNull();
+    expect([...svg.querySelectorAll("defs path")].map((path) => path.getAttribute("d"))).toContain(closed.elements[0].d);
+  });
+});
+
+describe("mask regions", () => {
+  // Regions come from sprite geometry, not the DOM: check them against what the browser draws.
+  for (const [path, fixture] of Object.entries(fixtures)) {
+    const name = path.split("/").pop()!.replace(/\.rig\.json$/, "");
+    it(`contain everything drawn in ${name}'s masks, posed or not`, async () => {
+      const props = fixtureProps(fixture);
+      for (const pose of [undefined, { rotations: { forearm_right: 120, arm_left: -60, torso: 15, head: -20, leg_right: 30 } }]) {
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        cleanups.push(() => {
+          root.unmount();
+          host.remove();
+        });
+        flushSync(() =>
+          root.render(
+            <svg xmlns={SVG_NS} width={800} height={1000} viewBox="-200 -250 400 500">
+              <Rig {...props} pose={pose} />
+            </svg>,
+          ),
+        );
+        const masks = [...host.querySelectorAll("mask")];
+        expect(masks.length).toBeGreaterThan(10);
+        for (const mask of masks) {
+          const content = mask.firstElementChild as SVGGraphicsElement | null;
+          if (!content || mask.getAttribute("maskUnits") !== "userSpaceOnUse") continue;
+          const box = content.getBBox();
+          if (!box.width && !box.height) continue;
+          const region = ["x", "y", "width", "height"].map((key) => Number(mask.getAttribute(key)));
+          const [x, y, width, height] = region;
+          // The padding (10) is left for strokes: the drawn geometry must fit inside the computed bounds alone.
+          const slack = 9.99;
+          expect({ id: mask.id, fits: box.x >= x + slack && box.y >= y + slack && box.x + box.width <= x + width - slack && box.y + box.height <= y + height - slack }).toEqual({ id: mask.id, fits: true });
+        }
+      }
+    });
+  }
 });

@@ -222,7 +222,8 @@ export default class SpriteBuilder {
     return this.with({ offsetX: x, offsetY: y });
   }
 
-  setScale(x: number, y: number): SpriteBuilder {
+  /** Sets the scale; `y` defaults to `x`. */
+  setScale(x: number, y: number = x): SpriteBuilder {
     return this.with({ scaleX: x, scaleY: y });
   }
 
@@ -327,18 +328,9 @@ export default class SpriteBuilder {
     });
   }
 
-  scalesWith(...n: number[]): SpriteBuilder {
-    return this.scalesWithX(...n).scalesWithY(...n);
-  }
-
-  scalesWithX(...xs: number[]): SpriteBuilder {
-    const newScaleX = xs.reduce((prev, curr) => prev * curr, this._state.scaleX);
-    return this.with({ scaleX: newScaleX });
-  }
-
-  scalesWithY(...ys: number[]): SpriteBuilder {
-    const newScaleY = ys.reduce((prev, curr) => prev * curr, this._state.scaleY);
-    return this.with({ scaleY: newScaleY });
+  /** Multiplies the scale by (x, y); `y` defaults to `x`. */
+  scaleBy(x: number, y: number = x): SpriteBuilder {
+    return this.with({ scaleX: this._state.scaleX * x, scaleY: this._state.scaleY * y });
   }
 
   setCustomColors(...colors: Color[]): SpriteBuilder {
@@ -374,14 +366,9 @@ export default class SpriteBuilder {
     return this.with({ dynamicPath: d });
   }
 
-  translatesWithX(...xs: number[]): SpriteBuilder {
-    const newOffsetX = xs.reduce((prev, curr) => prev + curr, this._state.offsetX);
-    return this.with({ offsetX: newOffsetX });
-  }
-
-  translatesWithY(...ys: number[]): SpriteBuilder {
-    const newOffsetY = ys.reduce((prev, curr) => prev + curr, this._state.offsetY);
-    return this.with({ offsetY: newOffsetY });
+  /** Moves the sprite by (x, y) from its offset. */
+  moveBy(x: number, y: number): SpriteBuilder {
+    return this.with({ offsetX: this._state.offsetX + x, offsetY: this._state.offsetY + y });
   }
 
   setShadowColorIndex(index: number): SpriteBuilder {
@@ -422,9 +409,9 @@ export default class SpriteBuilder {
     return this.with({ blur: resolved });
   }
 
-  rotatesWith(degrees: number): SpriteBuilder {
-    const newRotation = this._state.rotation + degrees;
-    return this.with({ rotation: newRotation });
+  /** Turns the sprite by `d` degrees. */
+  rotateBy(d: number): SpriteBuilder {
+    return this.with({ rotation: this._state.rotation + d });
   }
 
   setOutset(outset: number, index: number = 0): SpriteBuilder {
