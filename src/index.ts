@@ -31,7 +31,6 @@ export { default as SpriteBuilder } from "./types/SpriteBuilder";
 
 /* ---- render tree (headless) ---- */
 export {
-  buildRenderTree,
   flattenRenderTree,
   getRenderNodes,
   buildMaskSignature,

@@ -93,16 +93,17 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
   const posedTranslation = pose.translations?.[node.id];
   const posedScale = pose.scales?.[node.id];
   if (!node.drivers?.length && !posedTranslation && !posedScale) {
-    const posed = posedRotation ? { ...node, rotate: node.rotate + posedRotation } : node;
+    const posed = posedRotation ? { ...node, transform: { ...node.transform, rotate: node.transform.rotate + posedRotation } } : node;
     return { node: posed, hidden: false, zOffset: 0, outlineZOffset: 0 };
   }
-  let rotate = node.rotate + posedRotation;
-  let x = node.translate.x + (posedTranslation?.x ?? 0);
-  let y = node.translate.y + (posedTranslation?.y ?? 0);
-  let scaleX = node.scale.x * (posedScale?.x ?? 1);
-  let scaleY = node.scale.y * (posedScale?.y ?? 1);
-  let skewX = node.skew?.x ?? 0;
-  let skewY = node.skew?.y ?? 0;
+  const rest = node.transform;
+  let rotate = rest.rotate + posedRotation;
+  let x = rest.translate.x + (posedTranslation?.x ?? 0);
+  let y = rest.translate.y + (posedTranslation?.y ?? 0);
+  let scaleX = rest.scale.x * (posedScale?.x ?? 1);
+  let scaleY = rest.scale.y * (posedScale?.y ?? 1);
+  let skewX = rest.skew?.x ?? 0;
+  let skewY = rest.skew?.y ?? 0;
   let hidden = false;
   let zOffset = 0;
   let outlineZOffset = 0;
@@ -124,13 +125,13 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
     path = out.path ?? path;
     customSprite = out.customSprite ?? customSprite;
   }
-  const skew = node.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
+  const skew = rest.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
   const sprite =
     path !== undefined || customSprite
       ? { ...node.sprite, dynamicPath: path ?? node.sprite.dynamicPath, customSprite: customSprite ?? node.sprite.customSprite }
       : node.sprite;
   return {
-    node: { ...node, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew, sprite },
+    node: { ...node, transform: { ...rest, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew }, sprite },
     hidden,
     zOffset,
     outlineZOffset,
@@ -146,7 +147,7 @@ export const createRig = (root: Node): Rig => {
   const add = (node: Node, parent: number, via: RigEntry["via"]) => {
     const index = entries.push({ node, parent, via }) - 1;
     indexById.set(node.id, index);
-    if (node.outlineZIndex !== undefined) indexById.set(`${node.id}_outline`, index);
+    if (node.outline?.zIndex !== undefined) indexById.set(`${node.id}_outline`, index);
     node.joints?.forEach((child) => add(child, index, "joint"));
     node.attachments?.forEach((child) => add(child, index, "attachment"));
   };
@@ -154,7 +155,7 @@ export const createRig = (root: Node): Rig => {
   return { entries, indexById };
 };
 
-const hasConstraint = (node: Node) => Boolean(node.aimAt || node.pinTo);
+const hasConstraint = (node: Node) => Boolean(node.follow?.aimAt || node.follow?.pinTo);
 
 /** Thrown when a constraint's target can't be solved first: it depends on the constrained node itself. */
 const CYCLE = Symbol("cycle");
@@ -198,7 +199,7 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   /** One entry's matrices, given what it hangs from. */
   const solveEntry = (i: number, parentMatrix: MatrixTransform, targets: TargetMatrices | undefined) => {
     const { parent, via } = rig.entries[i];
-    const scaleFactor = via === "joint" ? posedNodes[parent].scale : UNIT_SCALE;
+    const scaleFactor = via === "joint" ? posedNodes[parent].transform.scale : UNIT_SCALE;
     const transform = resolveNodeTransform(posedNodes[i], parentMatrix, scaleFactor, targets);
     return {
       world: combineMatrixTransforms(parentMatrix, transformToMatrixWithMatrix(transform)),
@@ -249,7 +250,8 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
       const parentMatrix = hangsFrom(i, matrices, jointBases);
       const targets = hasConstraint(node) ? targetsFor() : undefined;
       const solved = solveEntry(i, parentMatrix, targets);
-      if (node.aimAt?.arrive && targets) dynamicPaths[i] = resolveArrivePath(node.aimAt, solved.world, targets);
+      const aimAt = node.follow?.aimAt;
+      if (aimAt?.arrive && targets) dynamicPaths[i] = resolveArrivePath(aimAt, solved.world, targets);
       matrices[i] = solved.world;
       jointBases[i] = solved.jointBase;
       parentMatrices[i] = parentMatrix;
@@ -273,12 +275,13 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     const world = matrices[i];
     const inheritedPattern = parent < 0 ? undefined : patternSpaces[parent];
     const inheritedGradient = parent < 0 ? undefined : gradientSpaces[parent];
-    patternSpaces[i] = node.patternSpace ? resolvePatternSpace(node.patternSpace, world, inheritedPattern) : inheritedPattern;
+    const { patternSpace, gradientSpace } = node.paint ?? {};
+    patternSpaces[i] = patternSpace ? resolvePatternSpace(patternSpace, world, inheritedPattern) : inheritedPattern;
     gradientSpaces[i] =
-      node.gradientSpace === "define"
+      gradientSpace === "define"
         ? combineMatrixTransforms(spriteUserSpace(world, node.sprite), getGradientFrame(node.sprite))
         : inheritedGradient;
-    if (node.gradientSpace === "inherit" && inheritedGradient) {
+    if (gradientSpace === "inherit" && inheritedGradient) {
       const inverse = invertMatrixTransform(spriteUserSpace(world, node.sprite));
       if (inverse) gradientTransforms[i] = matrixTransformToSvg(combineMatrixTransforms(inverse, inheritedGradient), 6);
     }

@@ -20,12 +20,12 @@ import { NodeBuilder, Rig, SpriteBuilder } from "paper-svg";
 const skin = new SpriteBuilder().setFill("#e8b796").setStroke("#222").setStrokeWidth(2);
 
 const forearm = new NodeBuilder("forearm")
-  .setJointPosition(0, -60)
+  .setPosition(0, -60)
   .setRotation(25)
   .setSprite(skin.setShape("rect").setScale(0.9, 6).setOffset(0, -30).build());
 
 const arm = new NodeBuilder("arm")
-  .setJointPosition(30, 40)
+  .setPosition(30, 40)
   .setRotation(20)
   .setSprite(skin.setShape("rect").setScale(1, 6).setOffset(0, -30).build());
 
@@ -71,14 +71,19 @@ Use `setArticulated(true)` or `setArticulated(false)` to override the default fo
 
 `NodeBuilder` and `SpriteBuilder` are immutable. Every call returns a new builder, so you can share a base and branch from it, as `skin` and `arm` do above.
 
-A few methods combine with earlier calls instead of replacing them:
+`set*` methods replace a value. Methods ending in `By` combine with what is there:
 
-| Method                                               | Effect                 |
-| ---------------------------------------------------- | ---------------------- |
-| `NodeBuilder.setJointPosition`, `translatesWithX/Y`  | Adds to the position   |
-| `NodeBuilder.setScale`, `scalesWith`, `scalesWithX/Y` | Multiplies the scale  |
-| `rotatesWith`                                        | Adds to the rotation   |
-| `NodeBuilder.setRotation`, all `SpriteBuilder` `set*` | Replaces the value    |
+| Method                        | Effect                                                        |
+| ----------------------------- | ------------------------------------------------------------- |
+| `moveBy(x, y)`                | Adds to the position (`NodeBuilder`) or offset (`SpriteBuilder`) |
+| `scaleBy(x, y = x)`           | Multiplies the scale; `NodeBuilder`'s takes `{ from }` to scale about a point |
+| `rotateBy(d)`                 | Adds to the rotation                                          |
+| `skewBy(x, y)`                | Adds to the skew (`NodeBuilder`)                              |
+| `transformBy(t)`              | Applies a whole transform on top (`NodeBuilder`)              |
+
+Upgrading from 0.2, where `setJointPosition` added and `NodeBuilder.setScale` multiplied: run
+`node node_modules/paper-svg/scripts/migrate-0.3.mjs path/to/tsconfig.json --write` once. It rewrites
+each old call to the `By` method that does the same thing.
 
 ### Left and right sides
 
@@ -164,7 +169,7 @@ Strokes keep the same width on screen when the SVG is scaled. If you zoom by cha
 
 | API                                                | Use                                                  |
 | -------------------------------------------------- | ---------------------------------------------------- |
-| `getRenderNodes`, `buildRenderTree`                | Resolve a tree to world matrices without React.      |
+| `getRenderNodes`                                   | Resolve a tree to world matrices without React.      |
 | `useRenderNodes`, `RigLayers`                      | Add your own selection, overlays or filters.         |
 | `resolveRotationPivot`                             | Find a joint's screen position in a custom handler.  |
 | `SvgSprite`                                        | Draw one sprite, for example in a thumbnail.         |

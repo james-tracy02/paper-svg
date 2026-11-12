@@ -1,4 +1,4 @@
-import { Fragment, memo, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useLayoutEffect, useMemo, type ReactNode } from "react";
 import type { Node } from "../types/Node";
 import type { Color } from "../types/primitives";
 import type { RenderGroupOptions } from "../types/RenderGroup";
@@ -8,7 +8,6 @@ import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
-import { createNodeInterner } from "./stableNodes";
 import { wrapWith } from "./fillWrappers";
 import { HoistedDefsProvider } from "./HoistedDefs";
 import { planLayers, resolveVisibleNodes, type ClipGroup, type MaskDef, type PaintItem } from "./layerPlan";
@@ -107,12 +106,10 @@ const RigLayers: React.FC<RigLayersProps> = ({
   const posed = getPosedRig(nodes);
   const current = posed?.current ?? sameNode;
   const planNodes = posed?.layout.nodes ?? nodes;
-  // Unchanged nodes keep their identity across rebuilds, so memoized groups skip re-rendering.
-  const [intern] = useState(createNodeInterner);
   const visibleNodes = useMemo(
-    () => posed?.layout.visibleNodes ?? intern(resolveVisibleNodes(planNodes)),
+    () => posed?.layout.visibleNodes ?? resolveVisibleNodes(planNodes),
     // `posed` changes with every pose; its layout only with the tree, which `planNodes` follows.
-    [planNodes, intern],
+    [planNodes],
   );
   const plan = useMemo(
     () => planLayers({ nodes: planNodes, visibleNodes, getRenderGroupOptions, scopeId }),

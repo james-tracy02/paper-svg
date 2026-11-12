@@ -81,7 +81,7 @@ describe("Rig", () => {
   });
 
   it("draws one fixed-size pivot per node, ignoring pointer events", () => {
-    const body = part("root").setScale(40, 0.1).addJoints(part("joint").build()).build();
+    const body = part("root").scaleBy(40, 0.1).addJoints(part("joint").build()).build();
     const svg = render({ body, showPivots: true });
     const pivots = svg.slice(svg.indexOf('<g pointer-events="none">'));
 

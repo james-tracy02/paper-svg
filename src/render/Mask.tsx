@@ -212,7 +212,7 @@ const SvgMask: React.FC<MaskProps> = ({
   );
 };
 
-// Groups arrays are rebuilt every render; members keep identity while unchanged (see stableNodes.ts).
+// Groups arrays are rebuilt every render; members keep identity while a pose leaves them in place (see posedRig.ts).
 const areEqual = (a: MaskProps, b: MaskProps) =>
   a.id === b.id &&
   a.groupName === b.groupName &&

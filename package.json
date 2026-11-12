@@ -5,7 +5,8 @@
   "type": "module",
   "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "scripts"
   ],
   "main": "./dist/paper-svg.cjs",
   "module": "./dist/paper-svg.js",

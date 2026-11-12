@@ -3,7 +3,7 @@
  * the frames it sets for patterns. Used by the pose solver (pose.ts); RenderTree reads the results.
  */
 import type { Vector2 } from "../types/primitives";
-import type { Node } from "../types/Node";
+import type { Node, NodeFollow, NodePaint } from "../types/Node";
 import type { MatrixTransform, Transform } from "../types/Transform";
 import { roundTo } from "../util/roundTo";
 import {
@@ -26,26 +26,26 @@ export const IDENTITY_MATRIX: MatrixTransform = {
 
 const makeTransform = (body: Node, scaleFactor: Vector2, fidelity: number = 4): Transform => ({
   translate: {
-    x: roundTo(scaleFactor.x * body.translate.x, fidelity),
-    y: roundTo(scaleFactor.y * body.translate.y, fidelity),
+    x: roundTo(scaleFactor.x * body.transform.translate.x, fidelity),
+    y: roundTo(scaleFactor.y * body.transform.translate.y, fidelity),
   },
   scale: {
-    x: roundTo(body.scale.x, fidelity),
-    y: roundTo(body.scale.y, fidelity),
+    x: roundTo(body.transform.scale.x, fidelity),
+    y: roundTo(body.transform.scale.y, fidelity),
   },
-  rotate: roundTo(body.rotate, fidelity),
-  skew: body.skew
+  rotate: roundTo(body.transform.rotate, fidelity),
+  skew: body.transform.skew
     ? {
-        x: roundTo(body.skew.x, fidelity),
-        y: roundTo(body.skew.y, fidelity),
+        x: roundTo(body.transform.skew.x, fidelity),
+        y: roundTo(body.transform.skew.y, fidelity),
       }
     : undefined,
-  matrix: body.matrix
+  matrix: body.transform.matrix
     ? {
-        a: roundTo(body.matrix.a, fidelity),
-        b: roundTo(body.matrix.b, fidelity),
-        c: roundTo(body.matrix.c, fidelity),
-        d: roundTo(body.matrix.d, fidelity),
+        a: roundTo(body.transform.matrix.a, fidelity),
+        b: roundTo(body.transform.matrix.b, fidelity),
+        c: roundTo(body.transform.matrix.c, fidelity),
+        d: roundTo(body.transform.matrix.d, fidelity),
       }
     : undefined,
 });
@@ -61,7 +61,7 @@ const angleOf = (v: Vector2) => Math.atan2(-v.y, v.x) * (180 / Math.PI);
  * node's local space. Returns undefined when the target isn't in the tree.
  */
 const resolvePinTranslate = (
-  pin: NonNullable<Node["pinTo"]>,
+  pin: NonNullable<NodeFollow["pinTo"]>,
   parentMatrix: MatrixTransform,
   targetMatrices: TargetMatrices,
 ): Vector2 | undefined => {
@@ -79,7 +79,7 @@ const resolvePinTranslate = (
  * point sits on the joint itself and no rotation can help.
  */
 const resolveAimRotation = (
-  aim: NonNullable<Node["aimAt"]>,
+  aim: NonNullable<NodeFollow["aimAt"]>,
   myTransform: Transform,
   parentMatrix: MatrixTransform,
   targetMatrices: TargetMatrices,
@@ -112,7 +112,7 @@ const resolveAimRotation = (
  * node's stretch doesn't skew the bend, then brought back into the node's local space.
  */
 export const resolveArrivePath = (
-  aim: NonNullable<Node["aimAt"]>,
+  aim: NonNullable<NodeFollow["aimAt"]>,
   worldMatrix: MatrixTransform,
   targetMatrices: TargetMatrices,
 ): string | undefined => {
@@ -141,20 +141,21 @@ export const resolveNodeTransform = (
   targetMatrices?: TargetMatrices,
 ): Transform => {
   const myTransform = makeTransform(body, scaleFactor);
+  const { follow } = body;
 
   // Adjust for fixed rotation
-  if (body.fixedRotation?.enabled) {
+  if (follow?.fixedRotation?.enabled) {
     const parentRotation = matrixToTransform(parentMatrix).rotate;
     const maxCorrection =
-      body.fixedRotation.max === undefined ? Math.abs(parentRotation) : Math.abs(body.fixedRotation.max);
+      follow.fixedRotation.max === undefined ? Math.abs(parentRotation) : Math.abs(follow.fixedRotation.max);
     const correction = Math.max(-maxCorrection, Math.min(maxCorrection, parentRotation));
-    myTransform.rotate = roundTo(body.rotate - correction, 4);
+    myTransform.rotate = roundTo(body.transform.rotate - correction, 4);
   }
 
   // Adjust for fixed scale: cancel out the parent's accumulated scale so this
   // node's world-space scale matches its own configured scale, regardless of
   // ancestor scaling.
-  if (body.fixedScale) {
+  if (follow?.fixedScale) {
     const parentScale = matrixToTransform(parentMatrix).scale;
     myTransform.scale = {
       x: parentScale.x ? myTransform.scale.x / parentScale.x : myTransform.scale.x,
@@ -164,8 +165,8 @@ export const resolveNodeTransform = (
 
   // Pin the joint onto a point on another node. The node's own translate stays as an additive
   // offset. Resolved before the aim, which measures direction from this joint.
-  if (body.pinTo && targetMatrices) {
-    const pinned = resolvePinTranslate(body.pinTo, parentMatrix, targetMatrices);
+  if (follow?.pinTo && targetMatrices) {
+    const pinned = resolvePinTranslate(follow.pinTo, parentMatrix, targetMatrices);
     if (pinned) {
       myTransform.translate = {
         x: roundTo(pinned.x + myTransform.translate.x, 4),
@@ -175,11 +176,11 @@ export const resolveNodeTransform = (
   }
 
   // Aim at a point on another node. The node's own rotation stays as an additive offset.
-  if (body.aimAt && targetMatrices) {
-    const aim = resolveAimRotation(body.aimAt, myTransform, parentMatrix, targetMatrices);
+  if (follow?.aimAt && targetMatrices) {
+    const aim = resolveAimRotation(follow.aimAt, myTransform, parentMatrix, targetMatrices);
     if (aim !== undefined) {
       myTransform.rotate = roundTo(myTransform.rotate + aim.rotation, 4);
-      if (body.aimAt.stretch) {
+      if (follow.aimAt.stretch) {
         myTransform.scale = { ...myTransform.scale, y: roundTo(myTransform.scale.y * aim.reach, 4) };
       }
     }
@@ -194,7 +195,7 @@ export const resolveNodeTransform = (
  * coordinate in both spaces, so the two stay in phase there whatever the pattern's scale, rotation or offset.
  */
 export const resolvePatternSpace = (
-  space: NonNullable<Node["patternSpace"]>,
+  space: NonNullable<NodePaint["patternSpace"]>,
   worldMatrix: MatrixTransform,
   parentSpace: MatrixTransform | undefined,
 ): MatrixTransform => {

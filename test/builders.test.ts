@@ -13,30 +13,58 @@ const customSprite = (id: string, colors: number): CustomSprite => ({
 
 describe("NodeBuilder", () => {
   it("returns a new builder from every call, so a base can be branched", () => {
-    const base = new NodeBuilder("part").setJointPosition(1, 2);
-    const moved = base.setJointPosition(10, 20);
+    const base = new NodeBuilder("part").moveBy(1, 2);
+    const moved = base.moveBy(10, 20);
 
-    expect(base.build().translate).toEqual({ x: 1, y: 2 });
-    expect(moved.build().translate).toEqual({ x: 11, y: 22 });
+    expect(base.build().transform.translate).toEqual({ x: 1, y: 2 });
+    expect(moved.build().transform.translate).toEqual({ x: 11, y: 22 });
   });
 
-  it("adds joint positions, multiplies scales and adds rotatesWith", () => {
+  it("sets on set*, and adds or multiplies on *By", () => {
+    const set = new NodeBuilder("part").moveBy(1, 2).setPosition(5, 6).scaleBy(3).setScale(2, 4).rotateBy(9).setRotation(10).build();
+    expect(set.transform.translate).toEqual({ x: 5, y: 6 });
+    expect(set.transform.scale).toEqual({ x: 2, y: 4 });
+    expect(set.transform.rotate).toBe(10);
+    expect(new NodeBuilder("part").setScale(3).build().transform.scale).toEqual({ x: 3, y: 3 });
+    expect(new NodeBuilder("part").setSkew(5, 1).skewBy(2).build().transform.skew).toEqual({ x: 7, y: 1 });
+  });
+
+  it("scales about a point with scaleBy's `from`, keeping that point in place", () => {
+    const node = new NodeBuilder("part").moveBy(10, 0).scaleBy(2, 3, { from: { x: 4, y: 5 } }).build();
+    expect(node.transform.scale).toEqual({ x: 2, y: 3 });
+    // The joint moves by (1 - n) * from, so `from` lands where it was.
+    expect(node.transform.translate).toEqual({ x: 10 - 4, y: -10 });
+  });
+
+  it("applies a transform on top with transformBy, and ignores undefined", () => {
     const node = new NodeBuilder("part")
-      .setJointPosition(1, 2)
-      .setJointPosition(3, 4)
-      .setScale(2, 3)
-      .scalesWith(2)
-      .rotatesWith(10)
-      .rotatesWith(5)
+      .moveBy(1, 1)
+      .setScale(2)
+      .transformBy({ translate: { x: 2, y: 3 }, scale: { x: 3, y: 1 }, rotate: 15 })
+      .transformBy(undefined)
+      .build();
+    expect(node.transform.translate).toEqual({ x: 3, y: 4 });
+    expect(node.transform.scale).toEqual({ x: 6, y: 2 });
+    expect(node.transform.rotate).toBe(15);
+  });
+
+  it("adds positions, multiplies scales and adds rotations on *By", () => {
+    const node = new NodeBuilder("part")
+      .moveBy(1, 2)
+      .moveBy(3, 4)
+      .scaleBy(2, 3)
+      .scaleBy(2)
+      .rotateBy(10)
+      .rotateBy(5)
       .build();
 
-    expect(node.translate).toEqual({ x: 4, y: 6 });
-    expect(node.scale).toEqual({ x: 4, y: 6 });
-    expect(node.rotate).toBe(15);
+    expect(node.transform.translate).toEqual({ x: 4, y: 6 });
+    expect(node.transform.scale).toEqual({ x: 4, y: 6 });
+    expect(node.transform.rotate).toBe(15);
   });
 
   it("replaces the rotation on setRotation", () => {
-    expect(new NodeBuilder("part").setRotation(10).setRotation(20).build().rotate).toBe(20);
+    expect(new NodeBuilder("part").setRotation(10).setRotation(20).build().transform.rotate).toBe(20);
   });
 
   it("names nodes by side", () => {
@@ -51,15 +79,15 @@ describe("NodeBuilder", () => {
 
   it("mirrors x, rotation and the sprite on the left side only", () => {
     const sprite = new SpriteBuilder().setOffset(5, 6).setScale(2, 3).build();
-    const part = new NodeBuilder("part").setJointPosition(10, 20).setRotation(30).setSprite(sprite);
+    const part = new NodeBuilder("part").moveBy(10, 20).setRotation(30).setSprite(sprite);
 
     const right = part.buildRight();
-    expect(right.translate).toEqual({ x: 10, y: 20 });
-    expect(right.rotate).toBe(30);
+    expect(right.transform.translate).toEqual({ x: 10, y: 20 });
+    expect(right.transform.rotate).toBe(30);
 
     const left = part.buildLeft();
-    expect(left.translate).toEqual({ x: -10, y: 20 });
-    expect(left.rotate).toBe(-30);
+    expect(left.transform.translate).toEqual({ x: -10, y: 20 });
+    expect(left.transform.rotate).toBe(-30);
     expect(left.sprite.translate).toEqual({ x: -5, y: 6 });
     expect(left.sprite.scale).toEqual({ x: -2, y: 3 });
   });

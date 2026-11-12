@@ -16,7 +16,6 @@ import type { Vector2 } from "../types/primitives";
 import { createRig, solvePose, type PoseSolution, type Rig } from "./pose";
 import { buildRenderTreeFromPose, flattenRenderTree, type RenderNode } from "./RenderTree";
 import { resolveVisibleNodes } from "./layerPlan";
-import { createNodeInterner } from "./stableNodes";
 
 export type RigLayout = {
   readonly rig: Rig;
@@ -41,27 +40,34 @@ export type PosedRig = {
 
 const byZIndex = (a: RenderNode, b: RenderNode) => a.zIndex - b.zIndex;
 
-export type LayoutInterners = {
-  nodes: (nodes: RenderNode[]) => RenderNode[];
-  visible: (nodes: RenderNode[]) => RenderNode[];
+/**
+ * `nodes`, with each one `previous` (a layout of the same rig) has at the same z-index reused. For one
+ * rig, a node at rest depends only on its entry and its z-index, so the reused node is identical. Its
+ * links (`parent`, `jointParent`, `linkedOutline`) may point into the previous layout; they are read
+ * only for what doesn't change with draw order (ids, `articulated`, stroke width).
+ */
+const reuseUnmoved = (nodes: RenderNode[], previous: readonly RenderNode[] | undefined) => {
+  if (!previous) return nodes;
+  const before = new Map(previous.map((node) => [node.id, node]));
+  return nodes.map((node) => {
+    const last = before.get(node.id);
+    return last && last.zIndex === node.zIndex ? last : node;
+  });
 };
 
 /**
  * Lays a rig out at rest, in the draw order of `drawOrder` (a solved pose; default: rest). Nodes are
- * placed at rest whatever the pose, so a new draw order leaves every node it doesn't reorder as it
- * was, and `intern` (see createNodeInterner; keep one per list across rebuilds) keeps those identical.
+ * placed at rest whatever the pose, so a new draw order changes only the nodes it reorders: pass the
+ * layout it replaces as `previous`, and every other node keeps its identity.
  */
-export const createRigLayout = (
-  rig: Rig,
-  drawOrder?: PoseSolution,
-  intern: LayoutInterners = { nodes: createNodeInterner(), visible: createNodeInterner() },
-): RigLayout => {
+export const createRigLayout = (rig: Rig, drawOrder?: PoseSolution, previous?: RigLayout): RigLayout => {
   const rest = solvePose(rig);
   const solution = drawOrder
     ? { ...rest, zOffsets: drawOrder.zOffsets, outlineZOffsets: drawOrder.outlineZOffsets, zKey: drawOrder.zKey }
     : rest;
-  const nodes = intern.nodes(flattenRenderTree(buildRenderTreeFromPose(rig, solution)).sort(byZIndex));
-  return { rig, zKey: solution.zKey, nodes, visibleNodes: intern.visible(resolveVisibleNodes(nodes)) };
+  const same = previous?.rig === rig ? previous : undefined;
+  const nodes = reuseUnmoved(flattenRenderTree(buildRenderTreeFromPose(rig, solution)).sort(byZIndex), same?.nodes);
+  return { rig, zKey: solution.zKey, nodes, visibleNodes: reuseUnmoved(resolveVisibleNodes(nodes), same?.visibleNodes) };
 };
 
 const sameVector = (a: Vector2 | undefined, b: Vector2 | undefined) => a === b || (!!a && !!b && a.x === b.x && a.y === b.y);

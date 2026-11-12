@@ -12,7 +12,7 @@ const sooz = upgradeFixture(exported as unknown as RigFixture).body;
 
 const withRotations = (node: Node, rotations: Record<string, number>): Node => ({
   ...node,
-  rotate: node.rotate + (rotations[node.id] ?? 0),
+  transform: { ...node.transform, rotate: node.transform.rotate + (rotations[node.id] ?? 0) },
   joints: node.joints?.map((child) => withRotations(child, rotations)),
   attachments: node.attachments?.map((child) => withRotations(child, rotations)),
 });
@@ -49,10 +49,10 @@ describe("render nodes", () => {
       .addJoints(
         new NodeBuilder("sleeve")
           .setSprite(patterned)
-          .setJointPosition(20, -10)
+          .moveBy(20, -10)
           .setRotation(40)
           .setPatternSpace({ rotation: -5 })
-          .addJoints(new NodeBuilder("cuff").setSprite(patterned).setJointPosition(0, -30).setRotation(25).build())
+          .addJoints(new NodeBuilder("cuff").setSprite(patterned).moveBy(0, -30).setRotation(25).build())
           .build(),
       )
       .build();
@@ -65,7 +65,7 @@ describe("render nodes", () => {
         part("arm")
           .setRotation(30)
           .setAimAt("tip", { x: 0, y: 0 })
-          .addJoints(part("tip").setJointPosition(0, -40).build())
+          .addJoints(part("tip").moveBy(0, -40).build())
           .build(),
       )
       .build();

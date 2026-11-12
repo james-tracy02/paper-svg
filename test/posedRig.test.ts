@@ -3,7 +3,6 @@ import { getRenderNodes, NodeBuilder, SpriteBuilder, type Node, type Pose, type 
 import { createRig, solvePose } from "../src/render/pose";
 import { createRigLayout, createRigPoser, poseTree } from "../src/render/posedRig";
 import { resolveVisibleNodes } from "../src/render/layerPlan";
-import { createNodeInterner } from "../src/render/stableNodes";
 import { upgradeFixture, type RigFixture } from "./fixtures/RigFixture";
 import exported from "./fixtures/sooz.rig.json";
 
@@ -38,7 +37,7 @@ describe("posing a layout", () => {
         new NodeBuilder("arm")
           .setSprite(new SpriteBuilder().setShape("rect").setStroke("black").setStrokeWidth(1).build())
           .setOutlineZIndex(-1)
-          .addJoints(part("hand").setJointPosition(0, 20).addDriver((p) => ({ visible: (p.values?.open ?? 1) > 0.5 })).build())
+          .addJoints(part("hand").moveBy(0, 20).addDriver((p) => ({ visible: (p.values?.open ?? 1) > 0.5 })).build())
           .build(),
         part("cord").setAimAt("hand", { x: 0, y: 0 }, undefined, false, { along: { x: 0, y: 1 }, bend: 0.3 }).build(),
       )
@@ -85,18 +84,17 @@ describe("posing a layout", () => {
           .setSprite(new SpriteBuilder().setPath(hemPath(0)).build())
           .addDriver((p) => ({ path: hemPath(p.values?.tilt ?? 0) }))
           .build(),
-        part("head").setJointPosition(0, -30).build(),
+        part("head").moveBy(0, -30).build(),
       )
       .build();
 
-    // As useRenderNodes runs it: one rig, interners and poser; a new layout only when `zKey` changes.
+    // As useRenderNodes runs it: one rig and poser; a new layout, replacing the last, only when `zKey` changes.
     const rig = createRig(body);
-    const interners = { nodes: createNodeInterner(), visible: createNodeInterner() };
     const poser = createRigPoser();
-    let layout = createRigLayout(rig, solvePose(rig), interners);
+    let layout = createRigLayout(rig, solvePose(rig));
     const frame = (pose: Pose) => {
       const solution = solvePose(rig, pose);
-      if (solution.zKey !== layout.zKey) layout = createRigLayout(rig, solution, interners);
+      if (solution.zKey !== layout.zKey) layout = createRigLayout(rig, solution, layout);
       return poser(layout, solution);
     };
 

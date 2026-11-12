@@ -12,7 +12,7 @@ const sooz = upgradeFixture(exported as unknown as RigFixture).body;
 /** The tree with each posed node's rotation added, as a rebuild with those rotations would make it. */
 const withRotations = (node: Node, pose: Pose): Node => ({
   ...node,
-  rotate: node.rotate + (pose.rotations?.[node.id] ?? 0),
+  transform: { ...node.transform, rotate: node.transform.rotate + (pose.rotations?.[node.id] ?? 0) },
   joints: node.joints?.map((child) => withRotations(child, pose)),
   attachments: node.attachments?.map((child) => withRotations(child, pose)),
 });
@@ -40,7 +40,7 @@ describe("solvePose", () => {
   });
 
   it("adds a pose's rotation to the node's own", () => {
-    const body = part("root").addJoints(part("arm").setJointPosition(10, 0).setRotation(20).build()).build();
+    const body = part("root").addJoints(part("arm").moveBy(10, 0).setRotation(20).build()).build();
     const rig = createRig(body);
     const turned = solvePose(rig, { rotations: { arm: 70 } }).matrices[rig.indexById.get("arm")!];
 
@@ -54,7 +54,7 @@ describe("solvePose", () => {
     const body = part("root")
       .addJoints(
         ...(["left", "right"] as const).map((side) =>
-          part("arm").setJointPosition(10, 0).setRotation(15).addJoints(part("hand").setJointPosition(0, 20).build()).buildSide(side),
+          part("arm").moveBy(10, 0).setRotation(15).addJoints(part("hand").moveBy(0, 20).build()).buildSide(side),
         ),
       )
       .build();
@@ -67,8 +67,11 @@ describe("solvePose", () => {
       const k = pose.scales?.[node.id];
       return {
         ...node,
-        translate: { x: node.translate.x + (t?.x ?? 0), y: node.translate.y + (t?.y ?? 0) },
-        scale: { x: node.scale.x * (k?.x ?? 1), y: node.scale.y * (k?.y ?? 1) },
+        transform: {
+          ...node.transform,
+          translate: { x: node.transform.translate.x + (t?.x ?? 0), y: node.transform.translate.y + (t?.y ?? 0) },
+          scale: { x: node.transform.scale.x * (k?.x ?? 1), y: node.transform.scale.y * (k?.y ?? 1) },
+        },
         joints: node.joints?.map(written),
       };
     };
@@ -85,8 +88,8 @@ describe("solvePose", () => {
     const body = part("root")
       .addJoints(
         part("pointer").setAimAt("pinned", { x: 0, y: 0 }).build(),
-        part("anchor").setJointPosition(50, 0).build(),
-        part("pinned").setJointPosition(0, 80).setPinTo("anchor").build(),
+        part("anchor").moveBy(50, 0).build(),
+        part("pinned").moveBy(0, 80).setPinTo("anchor").build(),
       )
       .build();
     const rig = createRig(body);

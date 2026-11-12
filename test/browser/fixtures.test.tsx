@@ -172,7 +172,7 @@ describe("fixtures", () => {
       const props = fixtureProps(fixture);
       const withRotations = (node: Node): Node => ({
         ...node,
-        rotate: node.rotate + (rotations[node.id] ?? 0),
+        transform: { ...node.transform, rotate: node.transform.rotate + (rotations[node.id] ?? 0) },
         joints: node.joints?.map(withRotations),
         attachments: node.attachments?.map(withRotations),
       });

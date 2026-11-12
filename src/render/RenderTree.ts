@@ -107,7 +107,7 @@ export const buildMaskSignature = (node: Node | undefined): string => {
   if (!node) {
     return "";
   }
-  const maskSig = node.mask ? getSpriteSignature(node.mask) : "none";
+  const maskSig = node.paint?.mask ? getSpriteSignature(node.paint.mask) : "none";
   const jointsSig = (node.joints ?? []).map((child) => buildMaskSignature(child)).join("|");
   const attachmentsSig = (node.attachments ?? []).map((child) => buildMaskSignature(child)).join("|");
   return `${node.id}:${maskSig}[${jointsSig}](${attachmentsSig})`;
@@ -132,7 +132,7 @@ const createRenderNode = (
     opts.parentMaskGroupModes || body.maskGroupModes
       ? { ...(opts.parentMaskGroupModes ?? {}), ...(body.maskGroupModes ?? {}) }
       : undefined;
-  const resolvedRenderGroup = body.renderGroup;
+  const paint = body.paint ?? {};
 
   const node: RenderNode = {
     id: body.id,
@@ -141,12 +141,12 @@ const createRenderNode = (
     matrix: solution.matrices[index],
     parentMatrix: solution.parentMatrices[index],
     translateScale: solution.translateScales[index],
-    articulated: body.articulated ?? opts.articulated,
+    articulated: body.interaction?.articulated ?? opts.articulated,
     draggable: opts.draggable,
-    noSprite: body.noSprite,
+    noSprite: paint.noSprite,
     hidden: solution.hidden[index] || undefined,
-    mask: body.mask,
-    clip: body.clip,
+    mask: paint.mask,
+    clip: paint.clip,
     maskedBy: mergedMaskedBy,
     outlineMaskedBy: body.outlineMaskedBy,
     maskGroups: mergedMaskGroups.length ? mergedMaskGroups : undefined,
@@ -159,15 +159,15 @@ const createRenderNode = (
     pattern: body.sprite.pattern,
     patternFills: body.sprite.patternFills,
     patternSpace: body.sprite.pattern ? solution.patternSpaces[index] : undefined,
-    renderGroupTag: body.renderGroupTag,
-    renderGroup: resolvedRenderGroup,
-    blendMode: body.blendMode,
-    maskOutline: body.maskOutline,
-    disableOutlineHoisting: body.disableOutlineHoisting,
+    renderGroupTag: paint.renderGroupTag,
+    renderGroup: paint.renderGroup,
+    blendMode: paint.blendMode,
+    maskOutline: body.outline?.masked,
+    disableOutlineHoisting: body.outline?.disableHoisting,
     clipMaskContribution: body.clipMaskContribution,
-    opacity: body.opacity ?? opts.opacity,
-    pointerEvents: body.pointerEvents,
-    pointerEventsTarget: body.pointerEventsTarget,
+    opacity: paint.opacity ?? opts.opacity,
+    pointerEvents: body.interaction?.pointerEvents,
+    pointerEventsTarget: body.interaction?.target,
     debugColor: body.debugColor,
   };
   node.parent = node.articulated ? node : opts.parent;
@@ -266,9 +266,9 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
   }, ctx);
 
   const outline =
-    body.outlineZIndex === undefined
+    body.outline?.zIndex === undefined
       ? undefined
-      : createOutlineNode(currentNode, body.outlineZIndex + ctx.solution.outlineZOffsets[index]);
+      : createOutlineNode(currentNode, body.outline.zIndex + ctx.solution.outlineZOffsets[index]);
 
   return {
     node: currentNode,
@@ -282,10 +282,6 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
 export const buildRenderTreeFromPose = (rig: Rig, solution: PoseSolution): RenderTree =>
   buildRenderTreeNode(rig.entries[0].node, {}, { solution, next: 0 });
 
-export const buildRenderTree = (body: Node, pose?: Pose): RenderTree => {
-  const rig = createRig(body);
-  return buildRenderTreeFromPose(rig, solvePose(rig, pose));
-};
 
 export const flattenRenderTree = (node: RenderTree): RenderNode[] => {
   const result: RenderNode[] = [];
@@ -311,7 +307,11 @@ export const flattenRenderTree = (node: RenderTree): RenderNode[] => {
   return result;
 };
 
-export const getRenderNodes = (body: Node, pose?: Pose) => flattenRenderTree(buildRenderTree(body, pose));
+/** Every render node of `body` in `pose`, in tree order (parents first), without React. */
+export const getRenderNodes = (body: Node, pose?: Pose) => {
+  const rig = createRig(body);
+  return flattenRenderTree(buildRenderTreeFromPose(rig, solvePose(rig, pose)));
+};
 
 export const measureGroupBounds = ({
   nodes,

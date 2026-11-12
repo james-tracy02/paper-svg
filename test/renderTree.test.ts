@@ -33,23 +33,23 @@ describe("transforms", () => {
   });
 
   it("carries a joint through its parent's rotation", () => {
-    const child = new NodeBuilder("child").setJointPosition(0, 10).build();
-    const nodes = byId(new NodeBuilder("root").setJointPosition(5, 5).setRotation(90).addJoints(child).build());
+    const child = new NodeBuilder("child").moveBy(0, 10).build();
+    const nodes = byId(new NodeBuilder("root").moveBy(5, 5).setRotation(90).addJoints(child).build());
 
     expectPoint(world(nodes, "child"), { x: 15, y: 5 });
   });
 
   it("scales a joint's position but not its size", () => {
-    const child = new NodeBuilder("child").setJointPosition(10, 10).build();
-    const nodes = byId(new NodeBuilder("root").setScale(2, 3).addJoints(child).build());
+    const child = new NodeBuilder("child").moveBy(10, 10).build();
+    const nodes = byId(new NodeBuilder("root").scaleBy(2, 3).addJoints(child).build());
 
     expectPoint(world(nodes, "child"), { x: 20, y: 30 });
     expectPoint(world(nodes, "child", { x: 1, y: 1 }), { x: 21, y: 31 });
   });
 
   it("scales an attachment's position and size", () => {
-    const child = new NodeBuilder("child").setJointPosition(10, 10).build();
-    const nodes = byId(new NodeBuilder("root").setScale(2, 3).addAttachments(child).build());
+    const child = new NodeBuilder("child").moveBy(10, 10).build();
+    const nodes = byId(new NodeBuilder("root").scaleBy(2, 3).addAttachments(child).build());
 
     expectPoint(world(nodes, "child"), { x: 20, y: 30 });
     expectPoint(world(nodes, "child", { x: 1, y: 1 }), { x: 22, y: 33 });
@@ -117,7 +117,7 @@ describe("mask inheritance", () => {
 });
 
 describe("constraints", () => {
-  const target = new NodeBuilder("target").setJointPosition(30, 40).setRotation(45).build();
+  const target = new NodeBuilder("target").moveBy(30, 40).setRotation(45).build();
 
   it("aims a node's local down axis at the target", () => {
     const aimed = new NodeBuilder("aimed").setAimAt("target", { x: 0, y: 0 }).build();
@@ -142,7 +142,7 @@ describe("constraints", () => {
   });
 
   it("keeps a pin on a target under a different parent", () => {
-    const parent = new NodeBuilder("parent").setJointPosition(-50, 7).setRotation(20).setScale(2, 2);
+    const parent = new NodeBuilder("parent").moveBy(-50, 7).setRotation(20).scaleBy(2, 2);
     const pinned = new NodeBuilder("pinned").setPinTo("target").build();
     const nodes = byId(new NodeBuilder("root").addJoints(target, parent.addJoints(pinned).build()).build());
 

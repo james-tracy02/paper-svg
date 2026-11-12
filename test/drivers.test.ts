@@ -17,8 +17,8 @@ const placement = (nodes: RenderNode[]) =>
 const shoulder = (follow: (pad: NodeBuilder) => NodeBuilder, side: "left" | "right") =>
   part("torso")
     .addJoints(
-      part("arm").setJointPosition(10, 0).buildSide(side),
-      follow(part("pad").setJointPosition(8, -2).addJoints(part("strap").setJointPosition(0, 6).build())).buildSide(side),
+      part("arm").moveBy(10, 0).buildSide(side),
+      follow(part("pad").moveBy(8, -2).addJoints(part("strap").moveBy(0, 6).build())).buildSide(side),
     )
     .build();
 
@@ -31,7 +31,7 @@ describe("drivers", () => {
 
     const driven = shoulder((pad) => pad.addDriver((p) => output(p.rotations?.[arm] ?? 0)), side);
     const baked = shoulder(
-      (pad) => pad.rotatesWith(o.rotate).translatesWithX(o.x).translatesWithY(o.y).scalesWithX(o.scaleX).skewsWith(o.skewX),
+      (pad) => pad.rotateBy(o.rotate).moveBy(o.x, 0).moveBy(0, o.y).scaleBy(o.scaleX, 1).skewBy(o.skewX),
       side,
     );
 
@@ -42,20 +42,20 @@ describe("drivers", () => {
   });
 
   it("scale a joint's children through the driven scale, as a baked scale does", () => {
-    const build = (pad: NodeBuilder) => part("torso").addJoints(pad.addJoints(part("strap").setJointPosition(0, 6).build()).build()).build();
+    const build = (pad: NodeBuilder) => part("torso").addJoints(pad.addJoints(part("strap").moveBy(0, 6).build()).build()).build();
     const driven = build(part("pad").addDriver((p) => ({ scaleY: 1 + (p.rotations?.arm ?? 0) / 50 })));
-    const baked = build(part("pad").scalesWithY(1.6));
+    const baked = build(part("pad").scaleBy(1, 1.6));
     const pose: Pose = { rotations: { arm: 30 } };
     expect(placement(getRenderNodes(driven, pose))).toEqual(placement(getRenderNodes(baked, pose)));
   });
 
   it("follow named values, which move nothing without a driver", () => {
     // An eye that opens with `eyeOpen` (fully open when the pose leaves it out), next to a node that shares its name.
-    const face = (eye: NodeBuilder) => part("head").addJoints(eye.setJointPosition(4, 2).build(), part("eyeOpen").build()).build();
+    const face = (eye: NodeBuilder) => part("head").addJoints(eye.moveBy(4, 2).build(), part("eyeOpen").build()).build();
     const driven = face(part("eye").addDriver((p) => ({ scaleY: p.values?.eyeOpen ?? 1 })));
     const pose: Pose = { values: { eyeOpen: 0.25 } };
 
-    expect(placement(getRenderNodes(driven, pose))).toEqual(placement(getRenderNodes(face(part("eye").scalesWithY(0.25)))));
+    expect(placement(getRenderNodes(driven, pose))).toEqual(placement(getRenderNodes(face(part("eye").scaleBy(1, 0.25)))));
     expect(placement(getRenderNodes(driven))).toEqual(placement(getRenderNodes(face(part("eye")))));
   });
 
@@ -65,7 +65,7 @@ describe("drivers", () => {
       .addDriver((p) => ({ rotate: arm(p), scaleX: 2 }))
       .addDriver((p) => ({ rotate: arm(p) / 2, scaleX: 1.5 }))
       .build();
-    const baked = part("root").rotatesWith(30, 15).scalesWithX(3).build();
+    const baked = part("root").rotateBy(30 + 15).scaleBy(3, 1).build();
     expect(placement(getRenderNodes(driven, { rotations: { arm: 30 } }))).toEqual(placement(getRenderNodes(baked)));
   });
 

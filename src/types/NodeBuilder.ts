@@ -1,7 +1,7 @@
 import type { Vector2 } from "./primitives";
 import type { CSSProperties } from "react";
-import type { Node } from "./Node";
-import type { Shape, Sprite } from "./Sprite";
+import type { Node, NodeFollow, NodePaint } from "./Node";
+import type { Sprite } from "./Sprite";
 import type { TransformState } from "./TransformState";
 import type { Transform } from "./Transform";
 import type { RenderGroup } from "./RenderGroup";
@@ -21,14 +21,13 @@ interface BuilderState {
   };
   fixedScale?: boolean;
   patternSpace?: { rotation: number; offset: Vector2 };
-  gradientSpace?: Node["gradientSpace"];
-  aimAt?: Node["aimAt"];
+  gradientSpace?: NodePaint["gradientSpace"];
+  aimAt?: NodeFollow["aimAt"];
   pinTo?: { targetId: string; point?: Vector2 };
   joints: Node[];
   attachments: Node[];
   zIndex?: number;
   articulated?: boolean;
-  shape?: Shape;
   skew?: Vector2;
   sprite: Sprite;
   noSprite?: boolean;
@@ -61,6 +60,12 @@ interface BuilderState {
   debugColor?: string;
   drivers?: Omit<NodeDriver, "mirror">[];
 }
+
+/** `group` without its undefined fields, or undefined when none is left. */
+const definedOnly = <T extends object>(group: T): T | undefined => {
+  const entries = Object.entries(group).filter(([, value]) => value !== undefined);
+  return entries.length ? (Object.fromEntries(entries) as T) : undefined;
+};
 
 export default class NodeBuilder {
   private readonly _state: BuilderState;
@@ -102,27 +107,42 @@ export default class NodeBuilder {
     return new NodeBuilder(this._state.name, { ...this._state, ...patch });
   }
 
-  setJointPosition(x: number, y: number): NodeBuilder {
-    return this.with({
-      translateX: this._state.translateX + x,
-      translateY: this._state.translateY + y,
-    });
+  /** Sets the joint's position in its parent's space. */
+  setPosition(x: number, y: number): NodeBuilder {
+    return this.with({ translateX: x, translateY: y });
   }
 
-  setScale(x: number, y: number): NodeBuilder {
-    return this.scalesWithX(x).scalesWithY(y);
+  /** Moves the joint by (x, y) from where it is. */
+  moveBy(x: number, y: number): NodeBuilder {
+    return this.with({ translateX: this._state.translateX + x, translateY: this._state.translateY + y });
   }
 
+  /** Sets the scale; `y` defaults to `x`. */
+  setScale(x: number, y: number = x): NodeBuilder {
+    return this.with({ scaleX: x, scaleY: y });
+  }
+
+  /**
+   * Multiplies the scale by (x, y); `y` defaults to `x`. With `from`, scales about that point of the
+   * node's own space instead of its joint: the joint moves so that point stays put.
+   */
+  scaleBy(x: number, y: number = x, { from }: { from?: Vector2 } = {}): NodeBuilder {
+    const scaled = this.with({ scaleX: this._state.scaleX * x, scaleY: this._state.scaleY * y });
+    return from ? scaled.moveBy((1 - x) * from.x, (1 - y) * from.y) : scaled;
+  }
+
+  /** Sets the joint's rest rotation in degrees, which a pose adds to. */
   setRotation(d: number): NodeBuilder {
     return this.with({ rotation: d });
   }
 
-  setFixedRotation(enabled: boolean, max?: number): NodeBuilder {
-    return this.with({ fixedRotation: { enabled, max } });
+  /** Turns the rest rotation by `d` degrees. */
+  rotateBy(d: number): NodeBuilder {
+    return this.with({ rotation: this._state.rotation + d });
   }
 
-  fixedRotation(enabled: boolean, max?: number): NodeBuilder {
-    return this.setFixedRotation(enabled, max);
+  setFixedRotation(enabled: boolean, max?: number): NodeBuilder {
+    return this.with({ fixedRotation: { enabled, max } });
   }
 
   setFixedScale(enabled: boolean = true): NodeBuilder {
@@ -179,60 +199,19 @@ export default class NodeBuilder {
     return this.with({ pinTo: { targetId, point } });
   }
 
-  scalesWithFrom(n: number, x: number, y: number): NodeBuilder {
-    return this.scalesWithXFrom(n, x).scalesWithYFrom(n, y);
-  }
-
-  scalesWithXFrom(n: number, x: number): NodeBuilder {
-    return this.scalesWithX(n).translatesWithX((1 - n) * x);
-  }
-
-  scalesWithYFrom(n: number, y: number): NodeBuilder {
-    return this.scalesWithY(n).translatesWithY((1 - n) * y);
-  }
-
-  scalesWith(...n: number[]): NodeBuilder {
-    return this.scalesWithX(...n).scalesWithY(...n);
-  }
-
-  scalesWithX(...xs: number[]): NodeBuilder {
-    const newScaleX = xs.reduce((prev, curr) => prev * curr, this._state.scaleX);
-    return this.with({ scaleX: newScaleX });
-  }
-
-  scalesWithY(...ys: number[]): NodeBuilder {
-    const newScaleY = ys.reduce((prev, curr) => prev * curr, this._state.scaleY);
-    return this.with({ scaleY: newScaleY });
-  }
-
-  translatesWithX(...xs: number[]): NodeBuilder {
-    const newTranslateX = xs.reduce((prev, curr) => prev + curr, this._state.translateX);
-    return this.with({ translateX: newTranslateX });
-  }
-
-  translatesWithY(...ys: number[]): NodeBuilder {
-    const newTranslateY = ys.reduce((prev, curr) => prev + curr, this._state.translateY);
-    return this.with({ translateY: newTranslateY });
-  }
-
-  rotatesWith(...ds: number[]): NodeBuilder {
-    const newRotation = ds.reduce((prev, curr) => prev + curr, this._state.rotation);
-    return this.with({ rotation: newRotation });
-  }
-
   /**
    * Computes part of this node's transform, or its visibility, from the pose each time it is solved,
    * instead of baking it in when the tree is built: a pose change then moves the node without a
    * rebuild. `drive` reads joint rotations (`pose.rotations`) or named values (`pose.values`) and
-   * supplies its own defaults for anything missing. The output combines like `rotatesWith`,
-   * `translatesWithX`/`Y`, `scalesWithX`/`Y` and `skewsWith`, and `buildLeft` mirrors it the same
-   * way. Drivers stack: each one added applies on top of the others.
+   * supplies its own defaults for anything missing. The output combines like `rotateBy`, `moveBy`,
+   * `scaleBy` and `skewBy`, and `buildLeft` mirrors it the same way. Drivers stack: each one added applies on top of the others.
    */
   addDriver(drive: (pose: Pose) => DriverOutput): NodeBuilder {
     return this.with({ drivers: [...(this._state.drivers ?? []), { evaluate: drive }] });
   }
 
-  skewsWith(x: number = 0, y: number = 0): NodeBuilder {
+  /** Adds (x, y) degrees to the skew. */
+  skewBy(x: number, y: number = 0): NodeBuilder {
     const skewX = (this._state.skew?.x ?? 0) + x;
     const skewY = (this._state.skew?.y ?? 0) + y;
     return this.with({ skew: { x: skewX, y: skewY } });
@@ -267,10 +246,7 @@ export default class NodeBuilder {
     return this.with({ articulated: a });
   }
 
-  setShape(s: Shape): NodeBuilder {
-    return this.with({ shape: s });
-  }
-
+  /** Sets the skew in degrees. */
   setSkew(x: number, y: number): NodeBuilder {
     return this.with({ skew: { x, y } });
   }
@@ -506,38 +482,22 @@ export default class NodeBuilder {
     return this.with({ clipMaskContribution: true });
   }
 
-  mirrorX(b: boolean): NodeBuilder {
-    return this.scalesWithX(b ? -1 : 1);
-  }
-
-  transformsWith(transformState: TransformState): NodeBuilder;
-  transformsWith(transform: Transform): NodeBuilder;
-  transformsWith(transform: TransformState | Transform): NodeBuilder {
+  /**
+   * Applies `transform` on top of this node's own: moved by its position, turned by its rotation,
+   * skewed by its skew and scaled by its scale. Does nothing for undefined.
+   */
+  transformBy(transform: TransformState | Transform | undefined): NodeBuilder {
+    if (!transform) return this;
     if ("positionX" in transform) {
-      return this.translatesWithX(transform.positionX)
-        .translatesWithY(transform.positionY)
-        .rotatesWith(transform.rotation)
-        .skewsWith(transform.skewX, transform.skewY)
-        .scalesWithX(transform.scaleX)
-        .scalesWithY(transform.scaleY);
+      return this.moveBy(transform.positionX, transform.positionY)
+        .rotateBy(transform.rotation)
+        .skewBy(transform.skewX, transform.skewY)
+        .scaleBy(transform.scaleX, transform.scaleY);
     }
-    return this.translatesWithX(transform.translate.x)
-      .translatesWithY(transform.translate.y)
-      .rotatesWith(transform.rotate)
-      .skewsWith(transform.skew?.x ?? 0, transform.skew?.y ?? 0)
-      .scalesWithX(transform.scale.x)
-      .scalesWithY(transform.scale.y);
-  }
-
-  withTransform(transformState: TransformState): NodeBuilder;
-  withTransform(transform: Transform): NodeBuilder;
-  withTransform(transform: undefined): NodeBuilder;
-  withTransform(transform: TransformState | Transform | undefined): NodeBuilder;
-  withTransform(transform: TransformState | Transform | undefined): NodeBuilder {
-    if (!transform) {
-      return this;
-    }
-    return this.transformsWith(transform as TransformState & Transform);
+    return this.moveBy(transform.translate.x, transform.translate.y)
+      .rotateBy(transform.rotate)
+      .skewBy(transform.skew?.x ?? 0, transform.skew?.y ?? 0)
+      .scaleBy(transform.scale.x, transform.scale.y);
   }
 
   private _build(suffix: string = "", mult: number = 1): Node {
@@ -570,44 +530,51 @@ export default class NodeBuilder {
         }
       : undefined;
 
+    const aimAt = s.aimAt && {
+      ...s.aimAt,
+      point: { x: s.aimAt.point.x * mult, y: s.aimAt.point.y },
+      from: s.aimAt.from && { x: s.aimAt.from.x * mult, y: s.aimAt.from.y },
+    };
     return {
       id: s.name + suffix,
       name: s.name + suffix,
-      translate: { x: s.translateX * mult, y: s.translateY },
-      scale: { x: s.scaleX, y: s.scaleY },
-      rotate: s.rotation * mult,
-      fixedRotation: s.fixedRotation,
-      fixedScale: s.fixedScale,
-      patternSpace: s.patternSpace,
-      gradientSpace: s.gradientSpace,
-      aimAt: s.aimAt
-        ? {
-            ...s.aimAt,
-            point: { x: s.aimAt.point.x * mult, y: s.aimAt.point.y },
-            from: s.aimAt.from && { x: s.aimAt.from.x * mult, y: s.aimAt.from.y },
-          }
-        : undefined,
-      pinTo: s.pinTo,
-      sprite: {
-        ...s.sprite,
-        translate: {
-          x: s.sprite.translate.x * mult,
-          y: s.sprite.translate.y,
-        },
-        scale: {
-          x: s.sprite.scale.x * mult,
-          y: s.sprite.scale.y,
-        },
+      transform: {
+        translate: { x: s.translateX * mult, y: s.translateY },
+        scale: { x: s.scaleX, y: s.scaleY },
+        rotate: s.rotation * mult,
+        skew: { x: (s.skew?.x ?? 0) * mult, y: (s.skew?.y ?? 0) * mult },
       },
-      skew: {
-        x: (s.skew?.x ?? 0) * mult,
-        y: (s.skew?.y ?? 0) * mult,
-      },
+      follow: definedOnly({ fixedRotation: s.fixedRotation, fixedScale: s.fixedScale, aimAt, pinTo: s.pinTo }),
+      drivers: s.drivers?.map((driver) => ({ ...driver, mirror: mult < 0 ? -1 : 1 })),
       joints: s.joints,
       attachments: [...s.attachments],
       zIndex: s.zIndex,
-      articulated: s.articulated,
-      noSprite: s.noSprite,
+      zIndexMode: s.zIndexMode,
+      sprite: {
+        ...s.sprite,
+        translate: { x: s.sprite.translate.x * mult, y: s.sprite.translate.y },
+        scale: { x: s.sprite.scale.x * mult, y: s.sprite.scale.y },
+      },
+      paint: definedOnly({
+        noSprite: s.noSprite,
+        mask,
+        clip,
+        opacity: s.opacity,
+        blendMode: s.blendMode,
+        patternSpace: s.patternSpace,
+        gradientSpace: s.gradientSpace,
+        renderGroup: s.renderGroup,
+      }),
+      outline: definedOnly({
+        zIndex: s.outlineZIndex,
+        masked: s.maskOutline,
+        disableHoisting: s.disableOutlineHoisting,
+      }),
+      interaction: definedOnly({
+        articulated: s.articulated,
+        pointerEvents: s.pointerEvents,
+        target: s.pointerEventsTarget,
+      }),
       maskedBy: s.maskedBy,
       outlineMaskedBy: s.outlineMaskedBy.length ? s.outlineMaskedBy : undefined,
       maskGroups: s.maskGroups,
@@ -622,20 +589,8 @@ export default class NodeBuilder {
       stopInheritedMasking: s.stopInheritedMasking,
       inheritGroupsForChildren: s.inheritGroupsForChildren,
       stopInheritedGroups: s.stopInheritedGroups,
-      mask: mask,
-      clip: clip,
-      outlineZIndex: s.outlineZIndex,
-      pointerEvents: s.pointerEvents,
-      pointerEventsTarget: s.pointerEventsTarget,
-      blendMode: s.blendMode,
-      zIndexMode: s.zIndexMode,
-      maskOutline: s.maskOutline,
-      disableOutlineHoisting: s.disableOutlineHoisting,
       clipMaskContribution: s.clipMaskContribution,
-      opacity: s.opacity,
-      renderGroup: s.renderGroup,
       debugColor: s.debugColor,
-      drivers: s.drivers?.map((driver) => ({ ...driver, mirror: mult < 0 ? -1 : 1 })),
     };
   }
 
