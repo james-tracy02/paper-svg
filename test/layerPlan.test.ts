@@ -105,7 +105,8 @@ describe("resolveVisibleNodes", () => {
 });
 
 describe("planLayers paint order", () => {
-  const skin = part("skin", 1).addMaskGroup("soft").build();
+  // Stroked below the nodes it masks, so the mask cuts out its outline band and stays a <mask>.
+  const skin = part("skin", 1, true).addMaskGroup("soft").build();
   const masked = (name: string, z: number) => part(name, z).addMaskedBy("soft").build();
 
   it("wraps neighbouring fills that share a mask once", () => {
@@ -182,7 +183,8 @@ describe("planLayers paint order", () => {
 
 describe("planLayers defs", () => {
   it("builds only the mask variants visible nodes use", () => {
-    const skin = part("skin", 1).addMaskGroup("soft").build();
+    // Stroked below the nodes it masks, so the mask cuts out its outline band and stays a <mask>.
+  const skin = part("skin", 1, true).addMaskGroup("soft").build();
     const plain = plan(root(skin, part("a", 2).addMaskedBy("soft").build())).defs;
     const outlined = plan(root(skin, part("a", 2).addMaskedBy("soft").setMaskOutline(true).build())).defs;
 
@@ -191,7 +193,6 @@ describe("planLayers defs", () => {
     ]);
     expect(plain.maskOutlines).toEqual([]);
     expect(plain.clipOutlines).toEqual([]);
-    expect(plain.clipFills).toEqual([]);
     expect(outlined.maskFills[0]).toMatchObject({ withFill: true, withNoOutline: false });
     expect(ids(outlined.maskOutlines[0].nodes)).toEqual(["skin"]);
   });
@@ -206,5 +207,52 @@ describe("planLayers defs", () => {
 
     expect(defs.maskFills[0].nodes[0]).toBe(nodes.find((node) => node.id === "torso"));
     expect(defs.maskFills[0].nodes[0].sprite.strokeWidth).toBe(2);
+  });
+
+  describe("draws a mask group as a clip-path when it only cuts hard edges", () => {
+    const asClip = (...children: Node[]) => {
+      const { defs, items } = plan(root(...children));
+      return { clip: defs.maskClips.has("soft"), masks: defs.maskFills.length, order: paintOrder(items) };
+    };
+    const user = () => part("a", 5).addMaskedBy("soft").build();
+
+    it("with plain members", () => {
+      expect(asClip(part("skin", 1).addMaskGroup("soft").build(), user())).toEqual({
+        clip: true,
+        masks: 0,
+        order: ["skin", { "clip:t_soft_group_clippath": ["a"] }],
+      });
+    });
+
+    it("with a stroked member painting its outline above every node it cuts", () => {
+      expect(asClip(part("skin", 9, true).addMaskGroup("soft").build(), user()).clip).toBe(true);
+    });
+
+    it("but not when the outline paints below a node it cuts, as the mask leaves out the outline's inner half", () => {
+      expect(asClip(part("skin", 1, true).addMaskGroup("soft").build(), user())).toMatchObject({ clip: false, masks: 1 });
+    });
+
+    it("only for nodes not clipped already, as Chromium stops anti-aliasing clips stacked deeper", () => {
+      const { defs, items } = plan(
+        root(
+          part("skin", 1).addMaskGroup("soft").addClippingGroup("hard").build(),
+          part("a", 5).addMaskedBy("soft").build(),
+          part("b", 6).addMaskedBy("soft").addClippedBy("hard").build(),
+        ),
+      );
+
+      expect([...(defs.maskClips.get("soft") ?? [])]).toEqual(["a"]);
+      expect(defs.maskFills.map((def) => def.id)).toEqual(["t_soft_group"]);
+      expect(paintOrder(items)).toEqual([
+        "skin",
+        { "clip:t_soft_group_clippath": ["a"] },
+        { [HARD]: [{ [SOFT]: ["b"] }] },
+      ]);
+    });
+
+    it("but not when a member subtracts", () => {
+      const cut = part("cut", 2).addMaskGroup("soft", "negative").build();
+      expect(asClip(part("skin", 1).addMaskGroup("soft").build(), cut, user()).clip).toBe(false);
+    });
   });
 });

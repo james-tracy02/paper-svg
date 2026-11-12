@@ -8,7 +8,7 @@ import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
-import { wrapWith } from "./fillWrappers";
+import { MaskClipsContext, wrapWith } from "./fillWrappers";
 import { HoistedDefsProvider } from "./HoistedDefs";
 import { planLayers, resolveVisibleNodes, type ClipGroup, type MaskDef, type PaintItem } from "./layerPlan";
 import { getPosedRig } from "./useRenderNodes";
@@ -77,7 +77,6 @@ const renderMaskDefs = (defs: MaskDef[], current: (node: RenderNode) => RenderNo
           mode={def.mode}
           withFill={def.withFill}
           withNoOutline={def.withNoOutline}
-          ignoreOpacity={def.ignoreOpacity}
         />
       ))}
     </defs>
@@ -188,25 +187,26 @@ const RigLayers: React.FC<RigLayersProps> = ({
   return (
     <PoseBindingsContext.Provider value={livePose?.bindings ?? null}>
       <HoistedDefsProvider>
-        <SpriteDefs body={body} nodes={posed?.nodes} />
-        {renderMaskDefs(plan.defs.maskFills, current)}
-        {renderMaskDefs(plan.defs.maskOutlines, current)}
-        {renderMaskDefs(plan.defs.clipOutlines, current)}
-        {renderMaskDefs(plan.defs.clipFills, current)}
-        <ClipPathDefs clipGroups={clipGroups} scopeId={scopeId} />
-        {outerOutline
-          ? plan.outerOutlines.map(current).map((g) => (
-              <SvgGroupOutline
-                key={`outer_${g.id}`}
-                g={g}
-                stroke={outerOutline.color}
-                strokeWidth={outerOutline.thickness}
-                scopeId={scopeId}
-                opacity={isHidden?.(g) ? 0 : g.opacity}
-              />
-            ))
-          : null}
-        {plan.items.map(renderItem)}
+        <MaskClipsContext.Provider value={plan.defs.maskClips}>
+          <SpriteDefs body={body} nodes={posed?.nodes} />
+          {renderMaskDefs(plan.defs.maskFills, current)}
+          {renderMaskDefs(plan.defs.maskOutlines, current)}
+          {renderMaskDefs(plan.defs.clipOutlines, current)}
+          <ClipPathDefs clipGroups={clipGroups} scopeId={scopeId} />
+          {outerOutline
+            ? plan.outerOutlines.map(current).map((g) => (
+                <SvgGroupOutline
+                  key={`outer_${g.id}`}
+                  g={g}
+                  stroke={outerOutline.color}
+                  strokeWidth={outerOutline.thickness}
+                  scopeId={scopeId}
+                  opacity={isHidden?.(g) ? 0 : g.opacity}
+                />
+              ))
+            : null}
+          {plan.items.map(renderItem)}
+        </MaskClipsContext.Provider>
       </HoistedDefsProvider>
     </PoseBindingsContext.Provider>
   );

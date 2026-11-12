@@ -1,5 +1,13 @@
+import { createContext } from "react";
 import type React from "react";
 import type { RenderNode } from "./RenderTree";
+
+/**
+ * Mask groups the layer plan also draws as a <clipPath> (`${name}_group_clippath`), as they only cut hard edges,
+ * with the ids of the nodes cut by that instead of the <mask> (see `planDefs`). Provided by RigLayers, so nodes
+ * that wrap their own fill agree with the plan.
+ */
+export const MaskClipsContext = createContext<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
 
 export type FillWrapTargets = {
   /** Soft-mask ids, outermost first. */
@@ -13,12 +21,24 @@ export const getFillWrapTargets = (
   g: RenderNode,
   scopeId: (suffix: string) => string,
   skipClipPaths?: boolean,
-): FillWrapTargets => ({
-  maskTargets: (g.maskedBy ?? []).map((clipId) => scopeId(`${clipId}_group${g.maskOutline ? "" : "_no_outline"}`)),
-  clipTargets: skipClipPaths
-    ? []
-    : [...new Set((g.clippedBy ?? []).map((name) => scopeId(`${name}_clippath`)))],
-});
+  maskClips: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): FillWrapTargets => {
+  const maskedBy = g.maskedBy ?? [];
+  const asClip = (name: string) => !g.maskOutline && Boolean(maskClips.get(name)?.has(g.id));
+  return {
+    maskTargets: maskedBy
+      .filter((name) => !asClip(name))
+      .map((name) => scopeId(`${name}_group${g.maskOutline ? "" : "_no_outline"}`)),
+    clipTargets: skipClipPaths
+      ? []
+      : [
+          ...new Set([
+            ...(g.clippedBy ?? []).map((name) => scopeId(`${name}_clippath`)),
+            ...maskedBy.filter(asClip).map((name) => scopeId(`${name}_group_clippath`)),
+          ]),
+        ],
+  };
+};
 
 /** One wrapper around a fill: `clip:<clipPath id>` or `mask:<mask id>`. */
 export type FillWrapper = `clip:${string}` | `mask:${string}`;

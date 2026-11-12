@@ -1,7 +1,7 @@
 import type { Color } from "../types/primitives";
 import React, { useContext } from "react";
 import SvgSprite from "./Sprite";
-import SvgSpriteMask from "./SpriteMask";
+import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
 import { PoseBindingsContext } from "./poseBindings";
@@ -50,7 +50,9 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
         <g
           ref={bindNodeTransform(bindings, g.id)}
           transform={transform}
-          mask={maskId ? `url(#${maskId})` : undefined} opacity={outerStyle ? undefined : opacity}>
+          {...(maskId ? spriteMaskAttributes(g.mask!, maskId) : {})}
+          opacity={outerStyle ? undefined : opacity}
+        >
           {sprite}
         </g>
       ) : (

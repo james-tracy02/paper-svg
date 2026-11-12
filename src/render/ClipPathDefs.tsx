@@ -57,12 +57,13 @@ const renderClipElement = (
       const resolvedFill = el.colorKey ? (sprite.colors?.[el.colorKey] ?? sprite.fill) : sprite.fill;
       if (!resolvedFill || resolvedFill === "none") return null;
       const t = [combinedTransform, customRootTransform, el.transform].filter(Boolean).join(" ");
-      const d = outset != null ? outsetPathData(el.d, outset) : el.d;
+      const d = outset ? outsetPathData(el.d, outset) : el.d;
       return <path key={`${key}_${i}`} ref={bind(t)} d={d} transform={t} />;
     });
   }
   if (sprite.dynamicPath) {
-    const outsetPath = (path: string) => (outset != null ? outsetPathData(path, outset) : path);
+    // An outset of 0 (addClippingGroup's default) leaves the path as is, without offsetting it.
+    const outsetPath = (path: string) => (outset ? outsetPathData(path, outset) : path);
     const drivenPath = (node: RenderNode) => node.sprite.dynamicPath && outsetPath(node.sprite.dynamicPath);
     return (
       <path
@@ -109,8 +110,12 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
               if (group.noSprite || group.hidden) return null;
               const nodeTransform = clipNodeTransform(group);
               const spriteTransform = getSpriteTransform(group.sprite, CLIP_PRECISION);
+              // A mask paints every path of a member white, whatever its fill.
+              const sprite = member.paintedAsMask
+                ? { ...group.sprite, fill: "white", colors: {}, clipPathIndices: undefined }
+                : group.sprite;
               return renderClipElement(
-                group.sprite,
+                sprite,
                 nodeTransform,
                 spriteTransform,
                 group.id,

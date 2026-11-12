@@ -1,6 +1,6 @@
 import type { RenderNode } from "./RenderTree";
 import SvgSprite from "./Sprite";
-import SvgSpriteMask from "./SpriteMask";
+import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import React, { useContext, useMemo } from "react";
 import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
@@ -41,8 +41,6 @@ type MaskProps = {
    * "outline_only" — just the outline mask (`${id}_outline`).
    */
   mode?: "all" | "outline_only" | "fill_only";
-  /** Ignore member sprite opacity, like a clipPath does (clip group fill masks; e.g. an invisible lower body). */
-  ignoreOpacity?: boolean;
   /** Fill modes: render the plain `${id}` mask. Off when no node references it. */
   withFill?: boolean;
   /** Fill modes: render the `${id}_no_outline` mask. Off when no node references it. */
@@ -62,7 +60,6 @@ const SvgMask: React.FC<MaskProps> = ({
   groupName,
   groups,
   mode = "all",
-  ignoreOpacity = false,
   withFill = true,
   withNoOutline = true,
 }) => {
@@ -101,15 +98,14 @@ const SvgMask: React.FC<MaskProps> = ({
   // Mask ids are `${scope}${groupName}_group` (mask groups) or `_clip_mask` (clip groups).
   const scopePrefix = id.slice(0, id.lastIndexOf(groupName));
 
-  // Opt-in (clipMaskContribution): the member adds only its clipped shape. Uses the clip group's soft
-  // fill mask (`${name}_clip_mask`), since clip-path is ignored inside <mask> content but mask isn't.
+  // Opt-in (clipMaskContribution): the member adds only its clipped shape, cut by the clip group's <clipPath>.
   const wrapInClipMasks = (group: RenderNode, content: React.ReactElement) =>
     group.clipMaskContribution
       ? [...new Set(group.clippedBy ?? [])]
           .filter((name) => name !== groupName)
           .reduce(
             (inner, name) => (
-              <g key={`${group.id}_clip_mask_${name}`} mask={`url(#${scopePrefix}${name}_clip_mask)`}>
+              <g key={`${group.id}_clippath_${name}`} clipPath={`url(#${scopePrefix}${name}_clippath)`}>
                 {inner}
               </g>
             ),
@@ -136,7 +132,7 @@ const SvgMask: React.FC<MaskProps> = ({
             <SvgSprite
               key={`${group.id}_${mode}`}
               id={group.id}
-              sprite={ignoreOpacity ? { ...group.sprite, opacity: undefined } : group.sprite}
+              sprite={group.sprite}
               mode={mode}
               fillOverride={maskFill}
               strokeOverride={outset > 0 ? (maskFill ?? "white") : maskValue === "negative" ? maskFill : undefined}
@@ -151,7 +147,7 @@ const SvgMask: React.FC<MaskProps> = ({
               key={`${group.id}_${mode}`}
               ref={bindNodeTransform(bindings, group.id)}
               transform={transform}
-              mask={`url(#${spriteMaskId})`}
+              {...spriteMaskAttributes(group.mask!, spriteMaskId)}
             >
               {sprite}
             </g>
@@ -217,7 +213,6 @@ const areEqual = (a: MaskProps, b: MaskProps) =>
   a.id === b.id &&
   a.groupName === b.groupName &&
   a.mode === b.mode &&
-  a.ignoreOpacity === b.ignoreOpacity &&
   a.withFill === b.withFill &&
   a.withNoOutline === b.withNoOutline &&
   a.groups.length === b.groups.length &&

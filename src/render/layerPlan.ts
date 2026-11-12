@@ -14,7 +14,8 @@ type GetRenderGroupOptions = (id: string) => RenderGroupOptions | undefined;
 
 export type MaskGroup = { id: string; groups: RenderNode[] };
 
-export type ClipGroupMember = { node: RenderNode; outset?: number };
+/** `paintedAsMask`: a mask group member, drawn whole as a mask paints it (any fill, every path). */
+export type ClipGroupMember = { node: RenderNode; outset?: number; paintedAsMask?: boolean };
 export type ClipGroup = { id: string; groups: ClipGroupMember[] };
 
 /** Soft-mask groups by name, with the nodes that draw into each (`addMaskGroup`). */
@@ -105,15 +106,19 @@ export type MaskDef = {
   mode: "fill_only" | "outline_only";
   withFill?: boolean;
   withNoOutline?: boolean;
-  ignoreOpacity?: boolean;
 };
 
 /** Mask and clip definitions: only those some visible node uses. */
 export type DefsPlan = {
+  /**
+   * Mask groups that are also drawn as a clip-path (`${name}_group_clippath`, in `clipGroups`), with the ids of
+   * the nodes cut by that instead of the mask (see `drawsMaskAsClip`).
+   */
+  maskClips: ReadonlyMap<string, ReadonlySet<string>>;
   maskFills: MaskDef[];
   maskOutlines: MaskDef[];
   clipOutlines: MaskDef[];
-  clipFills: MaskDef[];
+  /** Clip groups by name, and the mask groups in `maskClips` by `${name}_group`. */
   clipGroups: Map<string, ClipGroup>;
 };
 
@@ -154,6 +159,57 @@ export type PlanLayersOptions = {
   scopeId: ScopeId;
 };
 
+const isStroked = (node: RenderNode) => (node.sprite.strokeWidth ?? 0) > 0 && node.sprite.stroke !== "none";
+
+/**
+ * Whether a mask group's no-outline mask only cuts hard edges, so a <clipPath> of its members' shapes draws
+ * the same. That mask is the members' shapes, white, minus the inner half of each stroked member's outline:
+ * so every member must add (not subtract), be opaque and have no outset, mask or clip of its own, and every
+ * stroked member must paint its outline above every node the mask cuts, covering the band a clip keeps.
+ */
+const cutsHardEdges = (name: string, members: RenderNode[], visibleNodes: RenderNode[]) => {
+  const users = visibleNodes.filter((node) => node.maskedBy?.includes(name) && !node.noSprite);
+  const topUserZ = Math.max(...users.map((node) => node.zIndex));
+  const paintedIds = new Set(visibleNodes.map((node) => node.id));
+  return members.every((node) => {
+    if (node.noSprite) return true;
+    const { sprite } = node;
+    const plain =
+      node.maskGroupModes?.[name] !== "negative" &&
+      !node.maskOutsets?.[name] &&
+      !node.mask &&
+      !node.clipMaskContribution &&
+      (sprite.opacity ?? 1) >= 1 &&
+      !sprite.blur &&
+      !sprite.href &&
+      !sprite.customSprite?.image &&
+      !sprite.maskScale &&
+      sprite.shape !== "line";
+    if (!plain || !isStroked(node)) return plain;
+    return (
+      node.zIndex > topUserZ &&
+      paintedIds.has(node.id) &&
+      !node.hidden &&
+      !node.blendMode &&
+      !node.renderGroup &&
+      (node.opacity ?? 1) >= 1 &&
+      !node.maskedBy?.length &&
+      !node.clippedBy?.length
+    );
+  });
+};
+
+/**
+ * Whether a node cut by a hard-edged mask group takes it as a clip-path. Not when the node is clipped already
+ * (a clip group, its own mask or clip, or a render group's mask or clip): Chromium stops anti-aliasing clip-paths
+ * stacked that deep, which turns edges jagged (iris edges inside an eye clip, inside the face clip). Those
+ * nodes keep the mask, which draws the inner clip in its own layer.
+ */
+const drawsMaskAsClip = (node: RenderNode, getRenderGroupOptions: GetRenderGroupOptions) => {
+  const renderGroup = node.renderGroup && getRenderGroupOptions(node.renderGroup.id);
+  return !node.clippedBy?.length && !node.mask && !node.clip && !renderGroup?.clip && !renderGroup?.mask;
+};
+
 const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanLayersOptions): DefsPlan => {
   const maskGroups = getMaskGroups(nodes);
   const clipGroups = getClippingGroups(nodes);
@@ -163,8 +219,10 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
   const noOutline = new Set<string>();
   const outline = new Set<string>();
   const clipOutline = new Set<string>();
+  const renderGroupMasks = new Set<string>();
   for (const node of visibleNodes) {
     const renderGroupMask = node.renderGroup && getRenderGroupOptions(node.renderGroup.id)?.mask;
+    if (renderGroupMask) renderGroupMasks.add(renderGroupMask);
     if (renderGroupMask) noOutline.add(renderGroupMask);
     if (node.noSprite) continue;
     (node.maskedBy ?? []).forEach((name) => (node.maskOutline ? fill : noOutline).add(name));
@@ -173,11 +231,32 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
     (node.outlineClippedBy ?? node.outlineMaskedBy ?? node.clippedBy ?? []).forEach((name) => clipOutline.add(name));
   }
 
-  const maskGroupList = Array.from(maskGroups.values());
   const clipGroupList = Array.from(clipGroups.values());
-  const clipMaskNames = new Set(nodes.filter((node) => node.clipMaskContribution).flatMap((node) => node.clippedBy ?? []));
+  // Only the no-outline variant can be a clip-path (render groups name the mask itself).
+  const maskClips = new Map<string, Set<string>>();
+  const maskReplaced = new Set<string>();
+  for (const group of maskGroups.values()) {
+    const hard =
+      noOutline.has(group.id) &&
+      !fill.has(group.id) &&
+      !outline.has(group.id) &&
+      !renderGroupMasks.has(group.id) &&
+      cutsHardEdges(group.id, group.groups, visibleNodes);
+    if (!hard) continue;
+    const users = visibleNodes.filter((node) => !node.noSprite && node.maskedBy?.includes(group.id));
+    const clipUsers = users.filter((node) => drawsMaskAsClip(node, getRenderGroupOptions));
+    if (clipUsers.length) maskClips.set(group.id, new Set(clipUsers.map((node) => node.id)));
+    if (clipUsers.length === users.length) maskReplaced.add(group.id);
+  }
+  const maskGroupList = Array.from(maskGroups.values()).filter((group) => !maskReplaced.has(group.id));
+  const allClipGroups = new Map(clipGroups);
+  for (const name of maskClips.keys()) {
+    const members = maskGroups.get(name)!.groups.map((node) => ({ node, paintedAsMask: true }));
+    allClipGroups.set(`${name}_group`, { id: `${name}_group`, groups: members });
+  }
 
   return {
+    maskClips,
     maskFills: maskGroupList
       .filter((group) => fill.has(group.id) || noOutline.has(group.id))
       .map((group) => ({
@@ -207,17 +286,7 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
         nodes: group.groups.map((member) => member.node),
         mode: "outline_only",
       })),
-    clipFills: clipGroupList
-      .filter((group) => clipMaskNames.has(group.id))
-      .map((group) => ({
-        key: scopeId(`${group.id}_clip_mask_fill`),
-        id: scopeId(`${group.id}_clip_mask`),
-        groupName: group.id,
-        nodes: group.groups.map((member) => member.node),
-        mode: "fill_only",
-        ignoreOpacity: true,
-      })),
-    clipGroups,
+    clipGroups: allClipGroups,
   };
 };
 
@@ -273,6 +342,7 @@ const planPaint = (
   nodes: RenderNode[],
   getRenderGroupOptions: GetRenderGroupOptions,
   scopeId: ScopeId,
+  maskClips: ReadonlyMap<string, ReadonlySet<string>>,
 ): { items: PaintItem[]; outerOutlines: RenderNode[] } => {
   const maskOutlinesByAnchorId = anchorMaskOutlines(nodes);
   const outerOutlines: RenderNode[] = [];
@@ -289,7 +359,7 @@ const planPaint = (
         list.push({ kind: node.blendMode || maskOutlines ? "barrier" : "free", item });
         continue;
       }
-      const wrappers = listFillWrappers(getFillWrapTargets(node, scopeId)).filter((w) => !groupWrappers.includes(w));
+      const wrappers = listFillWrappers(getFillWrapTargets(node, scopeId, false, maskClips)).filter((w) => !groupWrappers.includes(w));
       list.push({ kind: "fill", node, wrappers });
       if (maskOutlines) {
         list.push({ kind: "barrier", item: { kind: "maskOutlines", key: `masks_${node.id}`, nodes: maskOutlines } });
@@ -388,7 +458,7 @@ const planPaint = (
 };
 
 /** Plans the defs and paint order for `visibleNodes` (see LayerPlan). */
-export const planLayers = (options: PlanLayersOptions): LayerPlan => ({
-  defs: planDefs(options),
-  ...planPaint(options.visibleNodes, options.getRenderGroupOptions, options.scopeId),
-});
+export const planLayers = (options: PlanLayersOptions): LayerPlan => {
+  const defs = planDefs(options);
+  return { defs, ...planPaint(options.visibleNodes, options.getRenderGroupOptions, options.scopeId, defs.maskClips) };
+};

@@ -49,7 +49,7 @@ const nodeTransform = (node: RenderNode) => matrixTransformToSvg(node.matrix);
 
 const isMaskMode = (mode: RenderMode) => mode === "mask" || mode === "outline_mask" || mode === "mask_no_outline";
 
-const getTransformForMode = (sprite: Sprite, mode: RenderMode) => {
+export const getTransformForMode = (sprite: Sprite, mode: RenderMode) => {
   if (mode === "pattern") return "";
   if (isMaskMode(mode) && sprite.maskScale) {
     return getSpriteTransform({

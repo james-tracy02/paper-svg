@@ -1,11 +1,11 @@
 import React, { useContext } from "react";
 import SvgSprite from "./Sprite";
-import SvgSpriteMask from "./SpriteMask";
+import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
 import type { Sprite } from "../types/Sprite";
-import { getFillWrapTargets, wrapFill } from "./fillWrappers";
+import { getFillWrapTargets, MaskClipsContext, wrapFill } from "./fillWrappers";
 import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
 
 /** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
@@ -82,6 +82,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   skipFillWrappers,
 }) => {
   const bindings = useContext(PoseBindingsContext);
+  const maskClips = useContext(MaskClipsContext);
   if (g.noSprite || g.hidden) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
@@ -93,12 +94,15 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   const rotateChain = rotates ? jointChain(rotateTarget) : undefined;
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
   const clipId = g.clip ? scopeId(`${g.id}_clip`) : undefined;
+  // A hard sprite mask is a clip-path too; the node's own clip then goes on an inner <g>, as one element takes one.
+  const spriteMask = maskId ? spriteMaskAttributes(g.mask!, maskId) : {};
+  const nestClip = (content: React.ReactElement) =>
+    spriteMask.clipPath && clipId ? <g clipPath={`url(#${clipId})`}>{content}</g> : content;
   const patternId = g.pattern ? scopeId(`${g.id}_pattern`) : undefined;
   const patternFillIds: Record<string, string> | undefined = g.patternFills
     ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
     : undefined;
-  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths);
-  const fillMaskTargets = fillWrapTargets.maskTargets;
+  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths, maskClips);
   const outlineMaskSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
   const outlineMaskTargets = outlineMaskSources.map((name) => scopeId(`${name}_group_outline`));
   const outlineClipSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
@@ -107,7 +111,8 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     : [];
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
-  const hasFillMasks = fillMaskTargets.length > 0;
+  // Masked nodes keep pointer events off, also where their mask group is drawn as a clip-path.
+  const hasFillMasks = (g.maskedBy?.length ?? 0) > 0;
 
   const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
     if (!maskIds.length) {
@@ -170,8 +175,8 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         transform={transform}
         // Opacity multiplies like the fill's masks and clip-paths, so it can sit here instead of on an outer <g>.
         opacity={outerStyle ? undefined : opacity}
-        mask={maskId ? `url(#${maskId})` : undefined}
-        clipPath={clipId ? `url(#${clipId})` : undefined}
+        mask={spriteMask.mask}
+        clipPath={spriteMask.clipPath ?? (clipId ? `url(#${clipId})` : undefined)}
         data-render-id={g.id}
         ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
         data-rotate-chain={rotateChain}
@@ -185,18 +190,20 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
               : { pointerEvents: "visiblePainted", ...(clickableStyle ?? {}) }
         }
       >
-        <SvgSprite
-          id={g.id}
-          poseNode={g.id}
-          articulated={articulated}
-          sprite={g.sprite}
-          mode={"default"}
-          pattern={patternId}
-          patternFills={patternFillIds}
-          cursorOverride={clickable ? "pointer" : undefined}
-          fillOverride={spriteFillOverride}
-          strokeOverride={spriteStrokeOverride}
-        />
+        {nestClip(
+          <SvgSprite
+            id={g.id}
+            poseNode={g.id}
+            articulated={articulated}
+            sprite={g.sprite}
+            mode={"default"}
+            pattern={patternId}
+            patternFills={patternFillIds}
+            cursorOverride={clickable ? "pointer" : undefined}
+            fillOverride={spriteFillOverride}
+            strokeOverride={spriteStrokeOverride}
+          />,
+        )}
       </g>
     </>
   );

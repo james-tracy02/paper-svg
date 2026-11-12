@@ -40,7 +40,9 @@ describe("Rig", () => {
 
   it("generates masks and clips under idPrefix and applies them", () => {
     const body = part("root")
+      // An outset keeps it a <mask> rather than a clip-path.
       .addMaskGroup("soft")
+      .setMaskOutset("soft", 1)
       .addClippingGroup("hard")
       .addJoints(part("masked").addMaskedBy("soft").build(), part("clipped").addClippedBy("hard").build())
       .build();
@@ -50,6 +52,52 @@ describe("Rig", () => {
     expect(svg).toContain('mask="url(#demo_soft_group');
     expect(svg).toContain('id="demo_hard_clippath"');
     expect(svg).toContain("url(#demo_hard_clippath)");
+  });
+
+  it("draws a hard sprite mask as a <clipPath> and a soft one as a <mask>", () => {
+    const hard = new SpriteBuilder().setShape("rect").setMaskScale(0.5).build();
+    const soft = new SpriteBuilder().setShape("rect").setOpacity(0.5).build();
+    const body = part("root").addJoints(part("cut").setMask(hard).build(), part("faded").setMask(soft).build()).build();
+    const svg = render({ body, idPrefix: "demo" });
+
+    expect(svg).toMatch(/<clipPath id="demo_cut_mask"[^>]*><rect [^>]*transform="[^"]*0\.5/);
+    expect(svg).toContain('clip-path="url(#demo_cut_mask)"');
+    expect(svg).toContain('<mask id="demo_faded_mask"');
+    expect(svg).toContain('mask="url(#demo_faded_mask)"');
+  });
+
+  it("nests a node's own clip inside its hard sprite mask, as one element takes one clip-path", () => {
+    const rect = new SpriteBuilder().setShape("rect").build();
+    const body = part("root").addJoints(part("cut").setMask(rect).setClip(rect).build()).build();
+    const svg = render({ body, idPrefix: "demo" });
+
+    expect(svg).toMatch(/clip-path="url\(#demo_cut_mask\)"[^>]*><g clip-path="url\(#demo_cut_clip\)">/);
+  });
+
+  it("cuts a clip contribution to a mask group by the clip group's <clipPath>, with no mask for it", () => {
+    const body = part("root")
+      .addClippingGroup("hard")
+      .addJoints(
+        part("member").addMaskGroup("soft").addClippedBy("hard").clipMaskContribution().build(),
+        part("masked").addMaskedBy("soft").build(),
+      )
+      .build();
+    const svg = render({ body, idPrefix: "demo" });
+
+    expect(svg).toMatch(/<mask id="demo_soft_group_no_outline"[^]*?clip-path="url\(#demo_hard_clippath\)"[^]*?<\/mask>/);
+    expect(svg).not.toContain("_clip_mask");
+  });
+
+  it("draws a clip member's path as is when its outset is 0, the addClippingGroup default", () => {
+    const d = "M 0 0 L 10 0 L 10 10 Z";
+    const body = part("root")
+      .setSprite(new SpriteBuilder().setPath(d).build())
+      .addClippingGroup("hard")
+      .addJoints(part("clipped").addClippedBy("hard").build())
+      .build();
+    const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_clippath"[^>]*>(.*?)<\/clipPath>/)?.[1];
+
+    expect(clipPath).toContain(`d="${d}"`);
   });
 
   it("does not draw a node restricted to a group nobody defines", () => {
