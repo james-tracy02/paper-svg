@@ -90,3 +90,31 @@ describe("Rig", () => {
     expect(count(pivots, 'vector-effect="non-scaling-stroke"')).toBe(2);
   });
 });
+
+describe("outlines", () => {
+  const stroked = (fill: string) =>
+    new SpriteBuilder().setShape("rect").setFill(fill).setStroke("#000").setStrokeWidth(2);
+
+  it("does not repaint the owner's pattern in a setOutlineZIndex outline", () => {
+    const pattern = new SpriteBuilder().setShape("ellipse").setFill("#ff0000").setScale(0.2, 0.2).build();
+    const body = new NodeBuilder("part").setSprite(stroked("#00ff00").setPattern(pattern).build()).setOutlineZIndex(5).build();
+    const svg = render({ body });
+
+    expect(svg).toContain("url(#rig_part_pattern)");
+    expect(svg).not.toContain("part_outline_pattern");
+  });
+
+  it("hoists a clip group owner's outline above its dependents, shrinking its sprite mask", () => {
+    const body = new NodeBuilder("owner")
+      .setSprite(stroked("#00ff00").build())
+      .setMask(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
+      .addClippingGroup("hard")
+      .addJoints(part("dependent").setZIndex(3).addClippedBy("hard").build())
+      .build();
+    const svg = render({ body });
+
+    expect(svg.indexOf(drawn("owner_outline"))).toBeGreaterThan(svg.indexOf(drawn("dependent")));
+    const outlineMask = svg.slice(svg.indexOf('id="rig_owner_outline_mask"'));
+    expect(outlineMask.slice(0, outlineMask.indexOf("</mask>"))).toContain("1.998");
+  });
+});

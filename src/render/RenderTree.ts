@@ -20,6 +20,7 @@ import {
 } from "./transform";
 import type { RenderGroup } from "../types/RenderGroup";
 import { getGradientFrame } from "./gradient";
+import { createOutlineNode } from "./outline";
 
 export type RenderNode = {
   id: string;
@@ -301,44 +302,6 @@ export const buildMaskSignature = (node: Node | undefined): string => {
   return `${node.id}:${maskSig}[${jointsSig}](${attachmentsSig})`;
 };
 
-const buildOutlineNode = (body: Node, currentNode: RenderNode, zIndex: number): RenderNode | undefined => {
-  if (body.outlineZIndex === undefined) {
-    return undefined;
-  }
-
-  const outlineIndices = currentNode.sprite.outlineIndices;
-  const hasOutlineIndices = Array.isArray(outlineIndices) && outlineIndices.length > 0;
-
-  const outline: RenderNode = {
-    ...currentNode,
-    id: body.id + "_outline",
-    zIndex: body.outlineZIndex,
-    sprite: {
-      ...currentNode.sprite,
-      fill: "none",
-      fillGradient: undefined,
-      colors: {},
-      strokeWidth: body.sprite.strokeWidth ? body.sprite.strokeWidth * (body.outlineZIndex < zIndex ? 2 : 1) : 0,
-      stroke: body.sprite.stroke,
-      outlineIndices: hasOutlineIndices ? outlineIndices : undefined,
-      outlineExcludeIndices: undefined,
-    },
-    articulated: false,
-    mask: currentNode.mask
-      ? { ...currentNode.mask, scale: { x: currentNode.mask.scale.x * 0.999, y: currentNode.mask.scale.y * 0.999 } }
-      : undefined,
-  };
-
-  currentNode.linkedOutline = outline; // link to parent for later reference
-  if (hasOutlineIndices) {
-    currentNode.sprite.outlineExcludeIndices = outlineIndices;
-    currentNode.sprite.outlineIndices = undefined;
-  } else {
-    currentNode.sprite.strokeWidth = 0; // stroke is handled by dynamic outline
-  }
-  return outline;
-};
-
 /**
  * Frame for a `patternSpace` node: its world frame without scale, turned by `rotation`, origin moved by `offset`.
  * Under an ancestor's pattern space the frame continues that grid instead: its origin maps to the same pattern
@@ -548,7 +511,7 @@ const buildRenderTreeNode = (
     gradientSpace,
   });
 
-  const outline = buildOutlineNode(body, currentNode, zIndex);
+  const outline = body.outlineZIndex === undefined ? undefined : createOutlineNode(currentNode, body.outlineZIndex);
 
   return {
     node: currentNode,

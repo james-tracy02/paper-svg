@@ -1,4 +1,3 @@
-import type { Color } from "../types/primitives";
 import type { RenderNode } from "./RenderTree";
 import type { Sprite } from "../types/Sprite";
 import SvgSprite from "./Sprite";
@@ -6,10 +5,10 @@ import SvgSpriteMask from "./SpriteMask";
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { combineMatrixTransforms, matrixTransformToSvg, transformToMatrixWithMatrix } from "./transform";
 import { maskProps } from "./maskProps";
+import { getSpriteSignature } from "./utils/getSpriteSignature";
 import {
   maskBoundsCache,
   areBoundsEqual,
-  serializeTransform,
   serializeMatrixTransform,
   expandBounds,
   type Bounds,
@@ -33,29 +32,6 @@ type MaskProps = {
   withFill?: boolean;
   /** Fill modes: render the `${id}_no_outline` mask. Off when no node references it. */
   withNoOutline?: boolean;
-};
-
-const serializeColorRecord = (record?: Record<string | number, Color>) => {
-  if (!record) return "";
-  return Object.keys(record)
-    .sort()
-    .map((key) => `${key}:${record[key] ?? ""}`)
-    .join(",");
-};
-
-const getSpriteSignature = (sprite: Sprite): string => {
-  const spriteKey = sprite.customSprite?.id ?? sprite.href ?? sprite.dynamicPath ?? sprite.shape ?? "ellipse";
-  const transformKey = serializeTransform(sprite);
-  const fillKey = sprite.fill ?? "";
-  const strokeKey = sprite.stroke ?? "";
-  const strokeWidthKey = sprite.strokeWidth ?? 0;
-  const opacityKey = sprite.opacity ?? 1;
-  const blurKey = sprite.blur ?? 0;
-  const lineCapKey = sprite.lineCap ?? "";
-  const patternKey = sprite.pattern ? `|pattern(${getSpriteSignature(sprite.pattern)})` : "";
-  const colorsKey = serializeColorRecord(sprite.colors);
-  const strokeColorsKey = serializeColorRecord(sprite.strokeColors);
-  return `${spriteKey}:${transformKey}:${fillKey}:${strokeKey}:${strokeWidthKey}:${opacityKey}:${blurKey}:${lineCapKey}:${colorsKey}:${strokeColorsKey}${patternKey}`;
 };
 
 const getGroupGeometryKey = (group: RenderNode) => {

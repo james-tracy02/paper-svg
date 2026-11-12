@@ -10,8 +10,9 @@ const serializeColorRecord = (record?: Record<string | number, Color>) => {
     .join(",");
 };
 
+/** Cache key for a sprite's look: its geometry, transform and paint. */
 export const getSpriteSignature = (sprite: Sprite): string => {
-  const spriteKey = sprite.customSprite?.id ?? sprite.href ?? sprite.shape ?? "ellipse";
+  const spriteKey = sprite.customSprite?.id ?? sprite.href ?? sprite.dynamicPath ?? sprite.shape ?? "ellipse";
   const transformKey = serializeTransform(sprite);
   const fillKey = sprite.fill ?? "";
   const strokeKey = sprite.stroke ?? "";
@@ -22,7 +23,5 @@ export const getSpriteSignature = (sprite: Sprite): string => {
   const patternKey = sprite.pattern ? `|pattern(${getSpriteSignature(sprite.pattern)})` : "";
   const colorsKey = serializeColorRecord(sprite.colors);
   const strokeColorsKey = serializeColorRecord(sprite.strokeColors);
-  const outlineIndicesKey = sprite.outlineIndices ? sprite.outlineIndices.join(",") : "";
-  const outlineExcludeKey = sprite.outlineExcludeIndices ? sprite.outlineExcludeIndices.join(",") : "";
-  return `${spriteKey}:${transformKey}:${fillKey}:${strokeKey}:${strokeWidthKey}:${opacityKey}:${blurKey}:${lineCapKey}:${colorsKey}:${strokeColorsKey}:${outlineIndicesKey}:${outlineExcludeKey}${patternKey}`;
+  return `${spriteKey}:${transformKey}:${fillKey}:${strokeKey}:${strokeWidthKey}:${opacityKey}:${blurKey}:${lineCapKey}:${colorsKey}:${strokeColorsKey}${patternKey}`;
 };
