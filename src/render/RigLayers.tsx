@@ -182,7 +182,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
 
   return (
     <HoistedDefsProvider>
-      <SpriteDefs body={body} />
+      <SpriteDefs body={body} nodes={posed?.nodes} />
       {renderMaskDefs(plan.defs.maskFills, current)}
       {renderMaskDefs(plan.defs.maskOutlines, current)}
       {renderMaskDefs(plan.defs.clipOutlines, current)}

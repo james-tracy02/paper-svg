@@ -15,7 +15,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { CSSProperties } from "react";
-import { getZoomVars, makeSprite, registerCustomSprite, Rig, type Node, type RigProps } from "../../src";
+import { getZoomVars, makeSprite, NodeBuilder, registerCustomSprite, Rig, SpriteBuilder, type Node, type RigProps } from "../../src";
 import { upgradeFixture, type RigFixture } from "../fixtures/RigFixture";
 import { buildScene, DEFAULT_POSE, STAR_SPRITE_ID, STAR_SVG } from "../../demo/puppet";
 
@@ -205,5 +205,45 @@ describe("demo puppet", () => {
       mirror: true,
       effects: { outerOutline: { color: "#2b6cb0", thickness: 4 }, glow: { color: "#ffe08a", radius: 6 } },
     });
+  });
+});
+
+describe("drivers", () => {
+  it("define the paths of a custom sprite a driver swaps in", async () => {
+    const shape = (id: string, d: string) => ({
+      id,
+      colors: 1,
+      strokeColors: 1,
+      elements: [{ d, colorKey: "color0" }],
+      translate: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      rotate: 0,
+    });
+    const open = shape("eye_open", "M 0 0 L 40 0 L 40 30 Z");
+    const closed = shape("eye_closed", "M 0 0 L 40 0 L 20 6 Z");
+    const body = new NodeBuilder("eye")
+      .setSprite(new SpriteBuilder().setCustomSprite(open).setFill("#336699").setStroke("#000000").setStrokeWidth(1).build())
+      .addDriver((p) => ({ customSprite: (p.values?.eyeOpen ?? 1) < 0.2 ? closed : undefined }))
+      .build();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    cleanups.push(() => {
+      root.unmount();
+      host.remove();
+    });
+    flushSync(() =>
+      root.render(
+        <svg xmlns={SVG_NS} width={200} height={200} viewBox="-50 -50 100 100">
+          <Rig body={body} idPrefix="eye" pose={{ values: { eyeOpen: 0.1 } }} />
+        </svg>,
+      ),
+    );
+    const svg = host.querySelector("svg")!;
+    await settle(svg);
+    const refs = [...svg.querySelectorAll("use")].map((use) => use.getAttribute("href") ?? use.getAttribute("xlink:href"));
+    expect(refs.length).toBeGreaterThan(0);
+    for (const ref of refs) expect(svg.querySelector(ref!), `${ref} is defined`).not.toBeNull();
+    expect([...svg.querySelectorAll("defs path")].map((path) => path.getAttribute("d"))).toContain(closed.elements[0].d);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRenderNodes, NodeBuilder, SpriteBuilder, type Node, type Pose, type RenderNode } from "../src";
+import { getRenderNodes, NodeBuilder, SpriteBuilder, type CustomSprite, type Node, type Pose, type RenderNode } from "../src";
 import { createRig, solvePose } from "../src/render/pose";
 import { flattenRenderTree, buildRenderTreeFromPose } from "../src/render/RenderTree";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
@@ -67,6 +67,88 @@ describe("drivers", () => {
       .build();
     const baked = part("root").rotatesWith(30, 15).scalesWithX(3).build();
     expect(placement(getRenderNodes(driven, { rotations: { arm: 30 } }))).toEqual(placement(getRenderNodes(baked)));
+  });
+
+  describe("draw order", () => {
+    // A forearm that steps in front of the torso past 150°, with a cuff placed relative to it and its own outline.
+    const forearm = (z: (p: Pose) => number) =>
+      part("torso")
+        .setZIndex(100)
+        .addJoints(
+          new NodeBuilder("forearm")
+            .setSprite(new SpriteBuilder().setShape("rect").setStroke("black").setStrokeWidth(1).build())
+            .setZIndex(-20)
+            .setOutlineZIndex(70)
+            .addDriver((p) => ({ zIndex: z(p), outlineZIndex: z(p) }))
+            .addJoints(part("cuff").setZIndex(1).build())
+            .build(),
+        )
+        .build();
+    const raised = (p: Pose) => ((p.rotations?.forearm ?? 0) > 150 ? 400 : 0);
+    const zIndices = (nodes: RenderNode[]) => Object.fromEntries(nodes.map((n) => [n.id, n.zIndex]));
+
+    it("adds to the node's z-index, carrying relative children and its outline along", () => {
+      const pose: Pose = { rotations: { forearm: 160 } };
+      const baked = part("torso")
+        .setZIndex(100)
+        .addJoints(
+          new NodeBuilder("forearm")
+            .setSprite(new SpriteBuilder().setShape("rect").setStroke("black").setStrokeWidth(1).build())
+            .setZIndex(380)
+            .setOutlineZIndex(470)
+            .addJoints(part("cuff").setZIndex(1).build())
+            .build(),
+        )
+        .build();
+      expect(zIndices(getRenderNodes(forearm(raised), pose))).toEqual(zIndices(getRenderNodes(baked, pose)));
+      expect(zIndices(getRenderNodes(forearm(raised), pose))).toEqual({ torso: 100, forearm: 480, forearm_outline: 470, cuff: 481 });
+    });
+
+    it("gives poses in one band the same draw order, so only a band change re-plans", () => {
+      const rig = createRig(forearm(raised));
+      const key = (rotation: number) => solvePose(rig, { rotations: { forearm: rotation } }).zKey;
+      expect(key(10)).toEqual(key(140));
+      expect(key(160)).toEqual(key(170));
+      expect(key(160)).not.toEqual(key(140));
+    });
+  });
+
+  describe("shape", () => {
+    const tile = (d: string): CustomSprite => ({
+      id: `tile_${d.length}`,
+      colors: 1,
+      strokeColors: 1,
+      elements: [{ d, colorKey: "color0" }],
+      translate: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      rotate: 0,
+    });
+    const hemPath = (tilt: number) => `M 0 0 L 10 ${5 + tilt * 3} L -10 5 Z`;
+    const sprite = new SpriteBuilder().setFill("#ff0000").setStroke("black").setStrokeWidth(1);
+
+    it("draws the path a driver gives, as `setPath` with that path would", () => {
+      const pose: Pose = { values: { tilt: 0.5 } };
+      const driven = part("root").addJoints(new NodeBuilder("hem").setSprite(sprite.setPath(hemPath(0)).build()).addDriver((p) => ({ path: hemPath(p.values?.tilt ?? 0) })).build()).build();
+      const baked = part("root").addJoints(new NodeBuilder("hem").setSprite(sprite.setPath(hemPath(0.5)).build()).build()).build();
+      const sprites = (body: Node, p?: Pose) => getRenderNodes(body, p).map((n) => n.sprite);
+      expect(sprites(driven, pose)).toEqual(sprites(baked));
+      expect(sprites(driven)).not.toEqual(sprites(baked));
+    });
+
+    it("swaps in the custom sprite a driver gives, keeping the node's colors and stroke", () => {
+      const open = tile("M 0 0 L 4 0 L 4 4 Z");
+      const closed = tile("M 0 0 L 4 0 Z");
+      const driven = new NodeBuilder("eye")
+        .setSprite(sprite.setCustomSprite(open).build())
+        .setOutlineZIndex(5)
+        .addDriver((p) => ({ customSprite: (p.values?.eyeOpen ?? 1) < 0.2 ? closed : undefined }))
+        .build();
+      const baked = new NodeBuilder("eye").setSprite(sprite.setCustomSprite(closed).build()).setOutlineZIndex(5).build();
+      const pose: Pose = { values: { eyeOpen: 0.1 } };
+      const fieldsOf = (nodes: RenderNode[]) => nodes.map(({ parent, jointParent, linkedOutline, ...rest }) => rest);
+      expect(fieldsOf(getRenderNodes(driven, pose))).toEqual(fieldsOf(getRenderNodes(baked)));
+      expect(getRenderNodes(driven).map((n) => n.sprite.customSprite)).toEqual([open, open]);
+    });
   });
 
   describe("visibility", () => {

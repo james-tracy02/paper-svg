@@ -137,7 +137,7 @@ const createRenderNode = (
   const node: RenderNode = {
     id: body.id,
     zIndex,
-    sprite: { ...body.sprite },
+    sprite: solution.customSprites[index] ? { ...body.sprite, customSprite: solution.customSprites[index] } : { ...body.sprite },
     matrix: solution.matrices[index],
     parentMatrix: solution.parentMatrices[index],
     translateScale: solution.translateScales[index],
@@ -221,7 +221,7 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     ? childParentClippingGroups
     : undefined;
 
-  const zIndex = resolveZIndex(body, opts.zIndex);
+  const zIndex = resolveZIndex(body, opts.zIndex) + ctx.solution.zOffsets[index];
   const currentNode = createRenderNode(
     body,
     index,
@@ -265,7 +265,10 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     parentMaskGroupModes: childParentMaskGroupModes,
   }, ctx);
 
-  const outline = body.outlineZIndex === undefined ? undefined : createOutlineNode(currentNode, body.outlineZIndex);
+  const outline =
+    body.outlineZIndex === undefined
+      ? undefined
+      : createOutlineNode(currentNode, body.outlineZIndex + ctx.solution.outlineZOffsets[index]);
 
   return {
     node: currentNode,

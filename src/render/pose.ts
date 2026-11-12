@@ -9,6 +9,7 @@
 import type { Node } from "../types/Node";
 import type { Pose } from "../types/Pose";
 import type { Vector2 } from "../types/primitives";
+import type { CustomSprite } from "../types/Sprite";
 import type { MatrixTransform } from "../types/Transform";
 import { getGradientFrame } from "./gradient";
 import {
@@ -56,10 +57,29 @@ export type PoseSolution = {
   gradientSpaces: (MatrixTransform | undefined)[];
   /** For `gradientSpace: "inherit"` entries: the SVG gradientTransform that draws in the ancestor's frame. */
   gradientTransforms: (string | undefined)[];
-  /** For `aimAt.arrive` entries: the curved path that meets the target's direction. */
+  /** The path an entry draws instead of its sprite's: a driver's `path`, or an `aimAt.arrive` curve. */
   dynamicPaths: (string | undefined)[];
+  /** The custom sprite a driver swaps in for an entry's own. */
+  customSprites: (CustomSprite | undefined)[];
   /** Entries a driver hides (`visible: false`), directly or through an ancestor. */
   hidden: boolean[];
+  /** What drivers add to each entry's z-index, and to its outline's. */
+  zOffsets: number[];
+  outlineZOffsets: number[];
+  /**
+   * The same for every pose that gives each entry the same z offsets. Draw order follows z, so the
+   * layer plan only needs redoing when this changes.
+   */
+  zKey: string;
+};
+
+type PosedEntry = {
+  node: Node;
+  hidden: boolean;
+  zOffset: number;
+  outlineZOffset: number;
+  path?: string;
+  customSprite?: CustomSprite;
 };
 
 const UNIT_SCALE: Vector2 = { x: 1, y: 1 };
@@ -68,12 +88,13 @@ const UNIT_SCALE: Vector2 = { x: 1, y: 1 };
  * `node` with its pose rotation and its drivers' outputs applied, and whether a driver hides it.
  * Returns `node` itself when neither changes it.
  */
-const applyPose = (node: Node, pose: Pose): { node: Node; hidden: boolean } => {
+const applyPose = (node: Node, pose: Pose): PosedEntry => {
   const posedRotation = pose.rotations?.[node.id] ?? 0;
   const posedTranslation = pose.translations?.[node.id];
   const posedScale = pose.scales?.[node.id];
   if (!node.drivers?.length && !posedTranslation && !posedScale) {
-    return { node: posedRotation ? { ...node, rotate: node.rotate + posedRotation } : node, hidden: false };
+    const posed = posedRotation ? { ...node, rotate: node.rotate + posedRotation } : node;
+    return { node: posed, hidden: false, zOffset: 0, outlineZOffset: 0 };
   }
   let rotate = node.rotate + posedRotation;
   let x = node.translate.x + (posedTranslation?.x ?? 0);
@@ -83,6 +104,10 @@ const applyPose = (node: Node, pose: Pose): { node: Node; hidden: boolean } => {
   let skewX = node.skew?.x ?? 0;
   let skewY = node.skew?.y ?? 0;
   let hidden = false;
+  let zOffset = 0;
+  let outlineZOffset = 0;
+  let path: string | undefined;
+  let customSprite: CustomSprite | undefined;
   for (const driver of node.drivers ?? []) {
     const out = driver.evaluate(pose);
     const m = driver.mirror;
@@ -94,9 +119,24 @@ const applyPose = (node: Node, pose: Pose): { node: Node; hidden: boolean } => {
     skewX += (out.skewX ?? 0) * m;
     skewY += (out.skewY ?? 0) * m;
     if (out.visible === false) hidden = true;
+    zOffset += out.zIndex ?? 0;
+    outlineZOffset += out.outlineZIndex ?? 0;
+    path = out.path ?? path;
+    customSprite = out.customSprite ?? customSprite;
   }
   const skew = node.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
-  return { node: { ...node, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew }, hidden };
+  const sprite =
+    path !== undefined || customSprite
+      ? { ...node.sprite, dynamicPath: path ?? node.sprite.dynamicPath, customSprite: customSprite ?? node.sprite.customSprite }
+      : node.sprite;
+  return {
+    node: { ...node, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew, sprite },
+    hidden,
+    zOffset,
+    outlineZOffset,
+    path,
+    customSprite,
+  };
 };
 
 /** Flattens `root` into a rig. Build it once per structure; pose it with `solvePose`. */
@@ -139,11 +179,20 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   // Each node as this pose leaves it. Parents come first, so a hidden parent hides its children.
   const posedNodes: Node[] = new Array(count);
   const hidden: boolean[] = new Array(count);
+  const zOffsets: number[] = new Array(count);
+  const outlineZOffsets: number[] = new Array(count);
+  const customSprites: (CustomSprite | undefined)[] = new Array(count);
+  const zKeyParts: string[] = [];
   for (let i = 0; i < count; i += 1) {
     const { node, parent } = rig.entries[i];
     const posed = applyPose(node, pose);
     posedNodes[i] = posed.node;
     hidden[i] = posed.hidden || (parent >= 0 && hidden[parent]);
+    zOffsets[i] = posed.zOffset;
+    outlineZOffsets[i] = posed.outlineZOffset;
+    customSprites[i] = posed.customSprite;
+    if (posed.path !== undefined) dynamicPaths[i] = posed.path;
+    if (posed.zOffset || posed.outlineZOffset) zKeyParts.push(`${i}:${posed.zOffset}:${posed.outlineZOffset}`);
   }
 
   /** One entry's matrices, given what it hangs from. */
@@ -218,7 +267,9 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   const gradientSpaces: (MatrixTransform | undefined)[] = new Array(count);
   const gradientTransforms: (string | undefined)[] = new Array(count);
   for (let i = 0; i < count; i += 1) {
-    const { node, parent } = rig.entries[i];
+    const { parent } = rig.entries[i];
+    // Posed, so a driven shape frames its gradient.
+    const node = posedNodes[i];
     const world = matrices[i];
     const inheritedPattern = parent < 0 ? undefined : patternSpaces[parent];
     const inheritedGradient = parent < 0 ? undefined : gradientSpaces[parent];
@@ -241,6 +292,10 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     gradientSpaces,
     gradientTransforms,
     dynamicPaths,
+    customSprites,
     hidden,
+    zOffsets,
+    outlineZOffsets,
+    zKey: zKeyParts.join(","),
   };
 };

@@ -10,6 +10,8 @@ import { getRenderNodes, getZoomVars, Rig, type Node, type Pose } from "paper-sv
 import { buildMaskSignature } from "../src/render/RenderTree";
 import { createNodeInterner } from "../src/render/stableNodes";
 import { planLayers, resolveVisibleNodes } from "../src/render/layerPlan";
+import { createRig, solvePose } from "../src/render/pose";
+import { createRigLayout, createRigPoser } from "../src/render/posedRig";
 import { upgradeFixture, type RigFixture } from "../test/fixtures/RigFixture";
 import exported from "../test/fixtures/sooz.rig.json";
 
@@ -106,6 +108,24 @@ const bench = {
       // Mostly unchanged nodes, as after a pose change: each is compared in full before it is reused.
       intern: time(runs, () => intern(getRenderNodes(a))) - time(runs, () => getRenderNodes(a)),
       resolveVisibleNodes: time(runs, () => resolveVisibleNodes(sorted)),
+      // A pose change that keeps the draw order: solve, then re-place nodes.
+      poseFrame: (() => {
+        const rig = createRig(fixture.body);
+        const poser = createRigPoser();
+        const layout = createRigLayout(rig);
+        let i = 0;
+        return time(runs, () => poser(layout, solvePose(rig, { rotations: { forearm_right: (i += 1) } })));
+      })(),
+      // A pose change that crosses a z band: a new layout, interned against the last, then planned.
+      relayout: (() => {
+        const rig = createRig(fixture.body);
+        const interners = { nodes: createNodeInterner(), visible: createNodeInterner() };
+        createRigLayout(rig, undefined, interners);
+        return time(runs, () => {
+          const layout = createRigLayout(rig, undefined, interners);
+          planLayers({ nodes: layout.nodes, visibleNodes: layout.visibleNodes, getRenderGroupOptions, scopeId: (s) => `bench_${s}` });
+        });
+      })(),
       planLayers: time(runs, () =>
         planLayers({ nodes: sorted, visibleNodes: visible, getRenderGroupOptions, scopeId: (s) => `bench_${s}` }),
       ),
