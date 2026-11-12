@@ -19,6 +19,7 @@ export const createOutlineNode = (owner: RenderNode, zIndex: number): RenderNode
   const outline: RenderNode = {
     ...owner,
     id: `${owner.id}_outline`,
+    outlineOf: owner.id,
     zIndex,
     pattern: undefined,
     patternFills: undefined,

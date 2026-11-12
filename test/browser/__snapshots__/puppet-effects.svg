@@ -27,10 +27,6 @@
 </path>
 </defs>
 <defs>
-</defs>
-<defs>
-</defs>
-<defs>
 <clipPath id="puppet_torso_shape_clippath" clipPathUnits="userSpaceOnUse">
 <ellipse rx="5" ry="5" transform="matrix(1, 0, 0, 1, 0, 0) matrix(7.2, 0, 0, 10.5, 0, 0)">
 </ellipse>

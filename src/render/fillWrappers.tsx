@@ -4,7 +4,7 @@ import type { RenderNode } from "./RenderTree";
 export type FillWrapTargets = {
   /** Soft-mask ids, outermost first. */
   maskTargets: string[];
-  /** True-clip clipPath ids, outermost first, de-duped. */
+  /** Clip group clipPath ids, outermost first, de-duped. */
   clipTargets: string[];
 };
 
@@ -12,10 +12,10 @@ export type FillWrapTargets = {
 export const getFillWrapTargets = (
   g: RenderNode,
   scopeId: (suffix: string) => string,
-  skipTrueClip?: boolean,
+  skipClipPaths?: boolean,
 ): FillWrapTargets => ({
   maskTargets: (g.maskedBy ?? []).map((clipId) => scopeId(`${clipId}_group${g.maskOutline ? "" : "_no_outline"}`)),
-  clipTargets: skipTrueClip
+  clipTargets: skipClipPaths
     ? []
     : [...new Set((g.clippedBy ?? []).map((name) => scopeId(`${name}_clippath`)))],
 });

@@ -21,12 +21,12 @@ type MaskProps = {
   /**
    * "all" — fill + outline + no-outline masks (legacy combined mode).
    * "fill_only" — just the plain fill + no-outline masks; use alongside a separate
-   * "outline_only" SvgMask instance (same mechanism as true-clip groups) to produce the
+   * "outline_only" SvgMask instance (same mechanism as clip groups) to produce the
    * outline mask instead.
    * "outline_only" — just the outline mask (`${id}_outline`).
    */
   mode?: "all" | "outline_only" | "fill_only";
-  /** Ignore member sprite opacity, like a clipPath does (true-clip fill masks; e.g. the invisible lower_body). */
+  /** Ignore member sprite opacity, like a clipPath does (clip group fill masks; e.g. an invisible lower body). */
   ignoreOpacity?: boolean;
   /** Fill modes: render the plain `${id}` mask. Off when no node references it. */
   withFill?: boolean;
@@ -267,18 +267,18 @@ const SvgMask: React.FC<MaskProps> = ({
     return map;
   }, [spriteMaskEntries]);
 
-  // Mask ids are `${scope}${groupName}_group|_trueclip` (Body.tsx).
+  // Mask ids are `${scope}${groupName}_group` (mask groups) or `_clip_mask` (clip groups).
   const scopePrefix = id.slice(0, id.lastIndexOf(groupName));
 
-  // Opt-in (clipMaskContribution): the member adds only its true-clipped shape. Uses the clip group's soft
-  // fill mask (`${name}_trueclip`, Body.tsx), since clip-path is ignored inside <mask> content but mask isn't.
-  const wrapInTrueClips = (group: RenderNode, content: React.ReactElement) =>
+  // Opt-in (clipMaskContribution): the member adds only its clipped shape. Uses the clip group's soft
+  // fill mask (`${name}_clip_mask`), since clip-path is ignored inside <mask> content but mask isn't.
+  const wrapInClipMasks = (group: RenderNode, content: React.ReactElement) =>
     group.clipMaskContribution
       ? [...new Set(group.clippedBy ?? [])]
           .filter((name) => name !== groupName)
           .reduce(
             (inner, name) => (
-              <g key={`${group.id}_trueclip_${name}`} mask={`url(#${scopePrefix}${name}_trueclip)`}>
+              <g key={`${group.id}_clip_mask_${name}`} mask={`url(#${scopePrefix}${name}_clip_mask)`}>
                 {inner}
               </g>
             ),
@@ -289,7 +289,7 @@ const SvgMask: React.FC<MaskProps> = ({
   const renderMaskContents = (mode: "mask" | "outline_mask" | "mask_no_outline", ref?: React.Ref<SVGGElement>) => (
     <g key={`${id}_${mode}_content`} ref={ref}>
       {uniqueGroups.map((group) =>
-        group.noSprite ? null : wrapInTrueClips(group, (() => {
+        group.noSprite ? null : wrapInClipMasks(group, (() => {
           // maskGroupModes (positive/negative) control whether a node's shape is
           // included/excluded from the plain fill mask. The outline ring mask must
           // always use its own black-fill/white-stroke ring coloring regardless of

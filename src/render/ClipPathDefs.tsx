@@ -1,8 +1,8 @@
 import React from "react";
-import type { RenderNode } from "./RenderTree";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import type { Sprite } from "../types/Sprite";
 import { outsetPathData } from "./outsetPath";
+import type { ClipGroup } from "./layerPlan";
 
 /**
  * Render a bare shape element for use inside <clipPath>.
@@ -56,41 +56,17 @@ const renderClipElement = (
   return <ellipse key={key} rx={5} ry={5} transform={combinedTransform} />;
 };
 
-export type TrueClipMember = {
-  node: RenderNode;
-  outset?: number;
-};
-
-export type TrueClipGroup = {
-  id: string;
-  groups: TrueClipMember[];
-};
-
-export const getClippingGroups = (groups: RenderNode[]): Map<string, TrueClipGroup> => {
-  const map = new Map<string, TrueClipGroup>();
-  for (const g of groups) {
-    for (const groupName of g.clippingGroups ?? []) {
-      if (!map.has(groupName)) {
-        map.set(groupName, { id: groupName, groups: [] });
-      }
-      const entry = map.get(groupName)!;
-      entry.groups.push({ node: g, outset: g.clipOutsets?.[groupName] });
-    }
-  }
-  return map;
-};
-
-type TrueClipDefsProps = {
-  trueClipGroups: Map<string, TrueClipGroup>;
+type ClipPathDefsProps = {
+  clipGroups: Map<string, ClipGroup>;
   scopeId: (suffix: string) => string;
 };
 
-const TrueClipDefs: React.FC<TrueClipDefsProps> = ({ trueClipGroups, scopeId }) => {
-  if (trueClipGroups.size === 0) return null;
+const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
+  if (clipGroups.size === 0) return null;
 
   return (
     <defs>
-      {Array.from(trueClipGroups.values()).map((clipGroup) => {
+      {Array.from(clipGroups.values()).map((clipGroup) => {
         const clipId = scopeId(`${clipGroup.id}_clippath`);
         return (
           <clipPath key={clipId} id={clipId} clipPathUnits="userSpaceOnUse">
@@ -108,4 +84,4 @@ const TrueClipDefs: React.FC<TrueClipDefsProps> = ({ trueClipGroups, scopeId }) 
   );
 };
 
-export default TrueClipDefs;
+export default ClipPathDefs;
