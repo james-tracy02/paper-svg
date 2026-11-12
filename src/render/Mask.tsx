@@ -5,6 +5,7 @@ import React, { useContext, useMemo } from "react";
 import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
 import { getSpriteSignature } from "./utils/getSpriteSignature";
+import { fillCuts, membership } from "./regions";
 import { getMaskRegion, type Bounds } from "./spriteBounds";
 import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
 import { bindNodeTransform } from "./Group";
@@ -100,8 +101,8 @@ const SvgMask: React.FC<MaskProps> = ({
 
   // Opt-in (clipMaskContribution): the member adds only its clipped shape, cut by the clip group's <clipPath>.
   const wrapInClipMasks = (group: RenderNode, content: React.ReactElement) =>
-    group.clipMaskContribution
-      ? [...new Set(group.clippedBy ?? [])]
+    membership(group, groupName, "mask")?.onlyWhereCut
+      ? [...new Set(fillCuts(group, "clip"))]
           .filter((name) => name !== groupName)
           .reduce(
             (inner, name) => (
@@ -122,10 +123,11 @@ const SvgMask: React.FC<MaskProps> = ({
           // always use its own black-fill/white-stroke ring coloring regardless of
           // that — applying the override there would fill the whole interior white
           // instead of punching a hole, breaking the ring.
-          const maskValue = mode === "outline_mask" ? undefined : group.maskGroupModes?.[groupName];
-          const maskFill = maskValue === "negative" ? "black" : maskValue === "positive" ? "white" : undefined;
+          const member = membership(group, groupName, "mask");
+          const subtract = mode === "outline_mask" ? undefined : member?.subtract;
+          const maskFill = subtract === true ? "black" : subtract === false ? "white" : undefined;
           // Outset: a stroke in the fill color, 2x wide, grows the shape by `outset` on every side.
-          const outset = mode === "outline_mask" ? 0 : (group.maskOutsets?.[groupName] ?? 0);
+          const outset = mode === "outline_mask" ? 0 : (member?.outset ?? 0);
           const transform = matrixTransformToSvg(group.matrix);
           const spriteMaskId = spriteMaskLookup.get(group.id);
           const sprite = (
@@ -135,7 +137,7 @@ const SvgMask: React.FC<MaskProps> = ({
               sprite={group.sprite}
               mode={mode}
               fillOverride={maskFill}
-              strokeOverride={outset > 0 ? (maskFill ?? "white") : maskValue === "negative" ? maskFill : undefined}
+              strokeOverride={outset > 0 ? (maskFill ?? "white") : subtract === true ? maskFill : undefined}
               strokeWidthOverride={outset > 0 ? outset * 2 : undefined}
               // A sprite mask is in node space, so only then does the node transform need its own <g>.
               baseTransform={spriteMaskId ? undefined : transform}

@@ -7,6 +7,7 @@ import SvgSpritePattern from "./Pattern";
 import type { Sprite } from "../types/Sprite";
 import { getFillWrapTargets, MaskClipsContext, wrapFill } from "./fillWrappers";
 import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
+import { fillCuts, outlineCuts } from "./regions";
 
 /** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
 const renderClipShape = (sprite: Sprite, spriteTransform: string): React.ReactNode => {
@@ -103,16 +104,16 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
     : undefined;
   const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths, maskClips);
-  const outlineMaskSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
+  const outlineMaskSources = outlineCuts(g, "mask");
   const outlineMaskTargets = outlineMaskSources.map((name) => scopeId(`${name}_group_outline`));
-  const outlineClipSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
-  const outlineClipMaskTargets = g.maskOutline
+  const outlineClipSources = outlineCuts(g, "clip");
+  const outlineClipMaskTargets = g.traceOutline
     ? outlineClipSources.map((name) => scopeId(`${name}_clip_mask_outline`))
     : [];
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
   // Masked nodes keep pointer events off, also where their mask group is drawn as a clip-path.
-  const hasFillMasks = (g.maskedBy?.length ?? 0) > 0;
+  const hasFillMasks = fillCuts(g, "mask").length > 0;
 
   const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
     if (!maskIds.length) {
@@ -222,7 +223,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   );
 
   let outlineGroup: React.ReactNode = null;
-  if (g.maskOutline && (outlineMaskTargets.length > 0 || outlineClipMaskTargets.length > 0)) {
+  if (g.traceOutline && (outlineMaskTargets.length > 0 || outlineClipMaskTargets.length > 0)) {
     const outlineWrapTargets = [...outlineMaskTargets, ...outlineClipMaskTargets];
     // The node's sprite mask is defined once, by the fill.
     const outlineNode = (

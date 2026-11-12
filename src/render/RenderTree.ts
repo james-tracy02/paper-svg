@@ -8,6 +8,7 @@ import { getSpriteSignature } from "./utils/getSpriteSignature";
 import type { RenderGroup } from "../types/RenderGroup";
 import { createOutlineNode } from "./outline";
 import { createRig, solvePose, type Pose, type PoseSolution, type Rig } from "./pose";
+import { resolveRegions, type RegionCut, type RegionMember } from "./regions";
 
 export type RenderNode = {
   id: string;
@@ -28,15 +29,10 @@ export type RenderNode = {
   jointParent?: RenderNode;
   mask?: Sprite;
   clip?: Sprite;
-  maskedBy?: string[];
-  outlineMaskedBy?: string[];
-  maskGroups?: string[];
-  maskGroupModes?: Record<string, "positive" | "negative">;
-  maskOutsets?: Record<string, number>;
-  clippedBy?: string[];
-  outlineClippedBy?: string[];
-  clippingGroups?: string[];
-  clipOutsets?: Record<string, number>;
+  /** Regions this node's shape joins (see regions.ts). */
+  regions?: RegionMember[];
+  /** Regions cutting this node's fill or the outline it traces. */
+  cuts?: RegionCut[];
   /** This node's separate outline node, when its stroke is drawn as one (see `outlineOf`). */
   linkedOutline?: RenderNode;
   /** On an outline node: the id of the node whose stroke it draws. */
@@ -50,9 +46,9 @@ export type RenderNode = {
   renderGroupTag?: string;
   renderGroup?: RenderGroup;
   blendMode?: CSSProperties["mixBlendMode"];
-  maskOutline?: boolean;
+  /** Draws this node's outline as its own layer, tracing the outlines of the regions it's cut by (`setMaskOutline`). */
+  traceOutline?: boolean;
   disableOutlineHoisting?: boolean;
-  clipMaskContribution?: boolean;
   opacity?: number;
 
   // debug
@@ -124,14 +120,16 @@ const createRenderNode = (
   opts: RenderOptions,
   zIndex: number,
 ): RenderNode => {
-  const mergedMaskedBy = [...(body.maskedBy ?? []), ...(body.parentMaskedBy ?? []), ...(opts.parentMaskedBy ?? [])];
-  const mergedClippedBy = [...(body.clippedBy ?? []), ...(opts.parentClippedBy ?? [])];
-  const mergedMaskGroups = [...(body.maskGroups ?? []), ...(opts.parentMaskGroups ?? [])];
-  const mergedClippingGroups = [...(body.clippingGroups ?? []), ...(opts.parentClippingGroups ?? [])];
-  const mergedMaskGroupModes =
-    opts.parentMaskGroupModes || body.maskGroupModes
-      ? { ...(opts.parentMaskGroupModes ?? {}), ...(body.maskGroupModes ?? {}) }
-      : undefined;
+  const { regions, cuts, traceOutline } = resolveRegions(body, {
+    maskedBy: [...(body.maskedBy ?? []), ...(body.parentMaskedBy ?? []), ...(opts.parentMaskedBy ?? [])],
+    clippedBy: [...(body.clippedBy ?? []), ...(opts.parentClippedBy ?? [])],
+    maskGroups: [...(body.maskGroups ?? []), ...(opts.parentMaskGroups ?? [])],
+    clippingGroups: [...(body.clippingGroups ?? []), ...(opts.parentClippingGroups ?? [])],
+    maskGroupModes:
+      opts.parentMaskGroupModes || body.maskGroupModes
+        ? { ...(opts.parentMaskGroupModes ?? {}), ...(body.maskGroupModes ?? {}) }
+        : undefined,
+  });
   const paint = body.paint ?? {};
 
   const node: RenderNode = {
@@ -147,24 +145,16 @@ const createRenderNode = (
     hidden: solution.hidden[index] || undefined,
     mask: solution.masks[index] === undefined ? paint.mask : (solution.masks[index] ?? undefined),
     clip: paint.clip,
-    maskedBy: mergedMaskedBy,
-    outlineMaskedBy: body.outlineMaskedBy,
-    maskGroups: mergedMaskGroups.length ? mergedMaskGroups : undefined,
-    maskGroupModes: mergedMaskGroupModes,
-    clippedBy: mergedClippedBy,
-    outlineClippedBy: body.outlineClippedBy,
-    clippingGroups: mergedClippingGroups.length ? mergedClippingGroups : undefined,
-    clipOutsets: body.clipOutsets,
-    maskOutsets: body.maskOutsets,
+    regions,
+    cuts,
     pattern: body.sprite.pattern,
     patternFills: body.sprite.patternFills,
     patternSpace: body.sprite.pattern ? solution.patternSpaces[index] : undefined,
     renderGroupTag: paint.renderGroupTag,
     renderGroup: paint.renderGroup,
     blendMode: paint.blendMode,
-    maskOutline: body.outline?.masked,
+    traceOutline,
     disableOutlineHoisting: body.outline?.disableHoisting,
-    clipMaskContribution: body.clipMaskContribution,
     opacity: paint.opacity ?? opts.opacity,
     pointerEvents: body.interaction?.pointerEvents,
     pointerEventsTarget: body.interaction?.target,

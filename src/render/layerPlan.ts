@@ -8,6 +8,7 @@ import type { RenderGroupOptions } from "../types/RenderGroup";
 import type { RenderNode } from "./RenderTree";
 import { getFillWrapTargets, listFillWrappers, type FillWrapper } from "./fillWrappers";
 import { createOutlineNode } from "./outline";
+import { fillCuts, isCut, memberOf, membership, outlineCuts } from "./regions";
 
 type ScopeId = (suffix: string) => string;
 type GetRenderGroupOptions = (id: string) => RenderGroupOptions | undefined;
@@ -22,7 +23,7 @@ export type ClipGroup = { id: string; groups: ClipGroupMember[] };
 export const getMaskGroups = (nodes: RenderNode[]): Map<string, MaskGroup> => {
   const map = new Map<string, MaskGroup>();
   for (const node of nodes) {
-    for (const name of node.maskGroups ?? []) {
+    for (const name of memberOf(node, "mask")) {
       if (!map.has(name)) map.set(name, { id: name, groups: [] });
       map.get(name)!.groups.push(node);
     }
@@ -34,9 +35,9 @@ export const getMaskGroups = (nodes: RenderNode[]): Map<string, MaskGroup> => {
 export const getClippingGroups = (nodes: RenderNode[]): Map<string, ClipGroup> => {
   const map = new Map<string, ClipGroup>();
   for (const node of nodes) {
-    for (const name of node.clippingGroups ?? []) {
+    for (const name of memberOf(node, "clip")) {
       if (!map.has(name)) map.set(name, { id: name, groups: [] });
-      map.get(name)!.groups.push({ node, outset: node.clipOutsets?.[name] });
+      map.get(name)!.groups.push({ node, outset: membership(node, name, "clip")?.outset });
     }
   }
   return map;
@@ -62,8 +63,8 @@ export const resolveVisibleNodes = (nodes: RenderNode[]): RenderNode[] => {
   const visible = nodes
     .filter(
       (node) =>
-        (node.maskedBy ?? []).every((name) => maskGroups.has(name)) &&
-        (node.clippedBy ?? []).every((name) => clipGroups.has(name)),
+        fillCuts(node, "mask").every((name) => maskGroups.has(name)) &&
+        fillCuts(node, "clip").every((name) => clipGroups.has(name)),
     )
     .map((node) => ({ ...node, sprite: { ...node.sprite } }));
 
@@ -71,8 +72,8 @@ export const resolveVisibleNodes = (nodes: RenderNode[]): RenderNode[] => {
   const ownerIdsByClipName = new Map<string, string[]>();
   const dependentsByClipName = new Map<string, RenderNode[]>();
   for (const node of visible) {
-    if (!isOutlineNode(node)) node.clippingGroups?.forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
-    node.clippedBy?.forEach((name) => pushTo(dependentsByClipName, name, node));
+    if (!isOutlineNode(node)) memberOf(node, "clip").forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
+    fillCuts(node, "clip").forEach((name) => pushTo(dependentsByClipName, name, node));
   }
 
   // Highest dependent z-index per owner, in the order owners are first reached.
@@ -168,17 +169,18 @@ const isStroked = (node: RenderNode) => (node.sprite.strokeWidth ?? 0) > 0 && no
  * stroked member must paint its outline above every node the mask cuts, covering the band a clip keeps.
  */
 const cutsHardEdges = (name: string, members: RenderNode[], visibleNodes: RenderNode[]) => {
-  const users = visibleNodes.filter((node) => node.maskedBy?.includes(name) && !node.noSprite);
+  const users = visibleNodes.filter((node) => fillCuts(node, "mask").includes(name) && !node.noSprite);
   const topUserZ = Math.max(...users.map((node) => node.zIndex));
   const paintedIds = new Set(visibleNodes.map((node) => node.id));
   return members.every((node) => {
     if (node.noSprite) return true;
     const { sprite } = node;
+    const member = membership(node, name, "mask");
     const plain =
-      node.maskGroupModes?.[name] !== "negative" &&
-      !node.maskOutsets?.[name] &&
+      member?.subtract !== true &&
+      !member?.outset &&
       !node.mask &&
-      !node.clipMaskContribution &&
+      !member?.onlyWhereCut &&
       (sprite.opacity ?? 1) >= 1 &&
       !sprite.blur &&
       !sprite.href &&
@@ -193,8 +195,7 @@ const cutsHardEdges = (name: string, members: RenderNode[], visibleNodes: Render
       !node.blendMode &&
       !node.renderGroup &&
       (node.opacity ?? 1) >= 1 &&
-      !node.maskedBy?.length &&
-      !node.clippedBy?.length
+      !isCut(node)
     );
   });
 };
@@ -207,7 +208,7 @@ const cutsHardEdges = (name: string, members: RenderNode[], visibleNodes: Render
  */
 const drawsMaskAsClip = (node: RenderNode, getRenderGroupOptions: GetRenderGroupOptions) => {
   const renderGroup = node.renderGroup && getRenderGroupOptions(node.renderGroup.id);
-  return !node.clippedBy?.length && !node.mask && !node.clip && !renderGroup?.clip && !renderGroup?.mask;
+  return !fillCuts(node, "clip").length && !node.mask && !node.clip && !renderGroup?.clip && !renderGroup?.mask;
 };
 
 const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanLayersOptions): DefsPlan => {
@@ -225,10 +226,10 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
     if (renderGroupMask) renderGroupMasks.add(renderGroupMask);
     if (renderGroupMask) noOutline.add(renderGroupMask);
     if (node.noSprite) continue;
-    (node.maskedBy ?? []).forEach((name) => (node.maskOutline ? fill : noOutline).add(name));
-    if (!node.maskOutline) continue;
-    (node.outlineMaskedBy ?? node.maskedBy ?? []).forEach((name) => outline.add(name));
-    (node.outlineClippedBy ?? node.outlineMaskedBy ?? node.clippedBy ?? []).forEach((name) => clipOutline.add(name));
+    fillCuts(node, "mask").forEach((name) => (node.traceOutline ? fill : noOutline).add(name));
+    if (!node.traceOutline) continue;
+    outlineCuts(node, "mask").forEach((name) => outline.add(name));
+    outlineCuts(node, "clip").forEach((name) => clipOutline.add(name));
   }
 
   const clipGroupList = Array.from(clipGroups.values());
@@ -243,7 +244,7 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
       !renderGroupMasks.has(group.id) &&
       cutsHardEdges(group.id, group.groups, visibleNodes);
     if (!hard) continue;
-    const users = visibleNodes.filter((node) => !node.noSprite && node.maskedBy?.includes(group.id));
+    const users = visibleNodes.filter((node) => !node.noSprite && fillCuts(node, "mask").includes(group.id));
     const clipUsers = users.filter((node) => drawsMaskAsClip(node, getRenderGroupOptions));
     if (clipUsers.length) maskClips.set(group.id, new Set(clipUsers.map((node) => node.id)));
     if (clipUsers.length === users.length) maskReplaced.add(group.id);
@@ -301,14 +302,14 @@ const anchorMaskOutlines = (nodes: RenderNode[]): Map<string, RenderNode[]> => {
   const outlineByOwnerId = new Map<string, RenderNode>();
   for (const node of nodes) {
     if (node.outlineOf !== undefined) outlineByOwnerId.set(node.outlineOf, node);
-    else node.clippingGroups?.forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
+    else memberOf(node, "clip").forEach((name) => pushTo(ownerIdsByClipName, name, node.id));
   }
 
   // The highest owner at or below the node, or failing that the highest owner.
   const findOwner = (node: RenderNode) => {
     let best: RenderNode | undefined;
     let highest: RenderNode | undefined;
-    for (const clipName of node.clippedBy ?? []) {
+    for (const clipName of fillCuts(node, "clip")) {
       for (const ownerId of ownerIdsByClipName.get(clipName) ?? []) {
         const owner = ownerById.get(ownerId);
         if (!owner) continue;
@@ -321,8 +322,8 @@ const anchorMaskOutlines = (nodes: RenderNode[]): Map<string, RenderNode[]> => {
 
   const byAnchorId = new Map<string, RenderNode[]>();
   for (const node of nodes) {
-    const isClipped = Boolean(node.clippedBy?.length);
-    if (!node.maskOutline || (!isClipped && !node.maskedBy?.length)) continue;
+    const isClipped = fillCuts(node, "clip").length > 0;
+    if (!node.traceOutline || (!isClipped && !fillCuts(node, "mask").length)) continue;
     const owner = isClipped ? findOwner(node) : undefined;
     const ownerOutline = owner && outlineByOwnerId.get(owner.id);
     const anchorId = ownerOutline && ownerOutline.zIndex >= node.zIndex ? ownerOutline.id : node.id;

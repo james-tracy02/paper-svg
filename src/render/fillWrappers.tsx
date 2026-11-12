@@ -1,6 +1,7 @@
 import { createContext } from "react";
 import type React from "react";
 import type { RenderNode } from "./RenderTree";
+import { fillCuts } from "./regions";
 
 /**
  * Mask groups the layer plan also draws as a <clipPath> (`${name}_group_clippath`), as they only cut hard edges,
@@ -23,17 +24,17 @@ export const getFillWrapTargets = (
   skipClipPaths?: boolean,
   maskClips: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ): FillWrapTargets => {
-  const maskedBy = g.maskedBy ?? [];
-  const asClip = (name: string) => !g.maskOutline && Boolean(maskClips.get(name)?.has(g.id));
+  const maskedBy = fillCuts(g, "mask");
+  const asClip = (name: string) => !g.traceOutline && Boolean(maskClips.get(name)?.has(g.id));
   return {
     maskTargets: maskedBy
       .filter((name) => !asClip(name))
-      .map((name) => scopeId(`${name}_group${g.maskOutline ? "" : "_no_outline"}`)),
+      .map((name) => scopeId(`${name}_group${g.traceOutline ? "" : "_no_outline"}`)),
     clipTargets: skipClipPaths
       ? []
       : [
           ...new Set([
-            ...(g.clippedBy ?? []).map((name) => scopeId(`${name}_clippath`)),
+            ...fillCuts(g, "clip").map((name) => scopeId(`${name}_clippath`)),
             ...maskedBy.filter(asClip).map((name) => scopeId(`${name}_group_clippath`)),
           ]),
         ],

@@ -9,6 +9,7 @@ import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
 import { MaskClipsContext, wrapWith } from "./fillWrappers";
+import { isCut } from "./regions";
 import { HoistedDefsProvider } from "./HoistedDefs";
 import { planLayers, resolveVisibleNodes, type ClipGroup, type MaskDef, type PaintItem } from "./layerPlan";
 import { getPosedRig } from "./useRenderNodes";
@@ -132,7 +133,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
 
   const renderNode = (planned: RenderNode, layer: "fill" | "maskOutline", skipFillWrappers?: boolean) => {
     const g = current(planned);
-    const isClipped = g.pointerEvents !== true && Boolean(g.maskedBy?.length || g.clippedBy?.length);
+    const isClipped = g.pointerEvents !== true && isCut(g);
     const interaction = resolveInteraction?.(g);
     const pointerEvents = interaction?.pointerEvents ?? (isClipped ? false : undefined);
     return (

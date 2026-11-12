@@ -6,6 +6,7 @@ import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
 import { PoseBindingsContext } from "./poseBindings";
 import { bindNodeTransform } from "./Group";
+import { isCut } from "./regions";
 
 export type SvgGroupOutlineProps = {
   g: RenderNode;
@@ -21,7 +22,7 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
 
   const transform = matrixTransformToSvg(g.matrix);
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
-  const isClipped = (g.maskedBy && g.maskedBy.length > 0) || (g.clippedBy && g.clippedBy.length > 0);
+  const isClipped = isCut(g);
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const adjustedStrokeWidth = strokeWidth + (g.linkedOutline ? g.linkedOutline.sprite.strokeWidth ?? 0 : 0);
 
