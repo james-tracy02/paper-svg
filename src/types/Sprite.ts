@@ -63,8 +63,6 @@ export type Sprite = Transform & {
     y: number;
   };
   clipPathIndices?: number[];
-  outlineIndices?: number[];
-  outlineExcludeIndices?: number[];
 };
 
 export type CustomSprite = Transform & {

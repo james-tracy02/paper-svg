@@ -11,6 +11,7 @@ import type { RenderNode } from "./RenderTree";
 import { createNodeInterner } from "./stableNodes";
 import { getFillWrapTargets, listFillWrappers, wrapWith, type FillWrapper } from "./fillWrappers";
 import { HoistedDefsProvider } from "./HoistedDefs";
+import { createOutlineNode } from "./outline";
 
 /** Overrides how one node responds to the pointer. */
 export type RigNodeInteraction = {
@@ -143,28 +144,9 @@ const RigLayers: React.FC<RigLayersProps> = ({
       const stroke = ownerNode.sprite.stroke;
       const strokeWidth = ownerNode.sprite.strokeWidth ?? 0;
       if (!stroke || stroke === "none" || strokeWidth <= 0) continue;
+      // Just above the highest dependent, so the outline draws over everything clipped to the owner.
       const maxDepZ = deps.reduce((max, d) => Math.max(max, d.node.zIndex), ownerNode.zIndex);
-      const hoistZ = maxDepZ + 0.00000001;
-      const outline: RenderNode = {
-        ...ownerNode,
-        id: `${ownerNode.id}_outline`,
-        zIndex: hoistZ,
-        pattern: undefined,
-        patternFills: undefined,
-        sprite: {
-          ...ownerNode.sprite,
-          fill: "none",
-          colors: {},
-          fillGradient: undefined,
-          strokeWidth: strokeWidth ? strokeWidth * (hoistZ < ownerNode.zIndex ? 2 : 1) : 0,
-          stroke: ownerNode.sprite.stroke,
-        },
-        articulated: false,
-        mask: ownerNode.mask,
-      };
-      ownerNode.linkedOutline = outline;
-      ownerNode.sprite.strokeWidth = 0;
-      hoistedOutlines.push(outline);
+      hoistedOutlines.push(createOutlineNode(ownerNode, maxDepZ + 0.00000001));
     }
 
     return internTrueClipNodes([...baseGroups, ...hoistedOutlines].sort((a, b) => a.zIndex - b.zIndex));
