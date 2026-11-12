@@ -1,6 +1,17 @@
 import type { Color } from "../../types/primitives";
 import type { Sprite } from "../../types/Sprite";
-import { serializeTransform } from "../maskBoundsCache";
+import type { Transform } from "../../types/Transform";
+import { roundTo } from "../../util/roundTo";
+
+const r = (value: number) => roundTo(value, 2);
+
+const serializeTransform = (transform: Transform & { maskScale?: { x: number; y: number } }) => {
+  const t = transform.translate;
+  const s = transform.scale;
+  const ms = transform.maskScale ?? { x: 1, y: 1 };
+  const skew = transform.skew ?? { x: 0, y: 0 };
+  return [r(t.x), r(t.y), r(s.x), r(s.y), r(ms.x), r(ms.y), r(transform.rotate), r(skew.x), r(skew.y)].join(",");
+};
 
 const serializeColorRecord = (record?: Record<string | number, Color>) => {
   if (!record) return "";

@@ -247,3 +247,42 @@ describe("drivers", () => {
     expect([...svg.querySelectorAll("defs path")].map((path) => path.getAttribute("d"))).toContain(closed.elements[0].d);
   });
 });
+
+describe("mask regions", () => {
+  // Regions come from sprite geometry, not the DOM: check them against what the browser draws.
+  for (const [path, fixture] of Object.entries(fixtures)) {
+    const name = path.split("/").pop()!.replace(/\.rig\.json$/, "");
+    it(`contain everything drawn in ${name}'s masks, posed or not`, async () => {
+      const props = fixtureProps(fixture);
+      for (const pose of [undefined, { rotations: { forearm_right: 120, arm_left: -60, torso: 15, head: -20, leg_right: 30 } }]) {
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        cleanups.push(() => {
+          root.unmount();
+          host.remove();
+        });
+        flushSync(() =>
+          root.render(
+            <svg xmlns={SVG_NS} width={800} height={1000} viewBox="-200 -250 400 500">
+              <Rig {...props} pose={pose} />
+            </svg>,
+          ),
+        );
+        const masks = [...host.querySelectorAll("mask")];
+        expect(masks.length).toBeGreaterThan(10);
+        for (const mask of masks) {
+          const content = mask.firstElementChild as SVGGraphicsElement | null;
+          if (!content || mask.getAttribute("maskUnits") !== "userSpaceOnUse") continue;
+          const box = content.getBBox();
+          if (!box.width && !box.height) continue;
+          const region = ["x", "y", "width", "height"].map((key) => Number(mask.getAttribute(key)));
+          const [x, y, width, height] = region;
+          // The padding (10) is left for strokes: the drawn geometry must fit inside the computed bounds alone.
+          const slack = 9.99;
+          expect({ id: mask.id, fits: box.x >= x + slack && box.y >= y + slack && box.x + box.width <= x + width - slack && box.y + box.height <= y + height - slack }).toEqual({ id: mask.id, fits: true });
+        }
+      }
+    });
+  }
+});
