@@ -1,6 +1,6 @@
 /**
- * Poses written straight to the DOM (see poseBindings.ts). A pose that only moves nodes and reshapes
- * driven paths is written; one that changes what is drawn (draw order, a node shown or hidden, a
+ * Poses written straight to the DOM (see poseBindings.ts). A pose that only moves nodes, reshapes
+ * driven paths, or shows and hides nodes is written; one that changes what is drawn (draw order, a
  * swapped sprite or mask, a gradient frame, which changes the gradient's id) needs a React render.
  *
  * A written pose doesn't make full render nodes: each node is compared where it stands, and a node
@@ -44,9 +44,11 @@ const getWritableNodes = (layout: RigLayout) => {
   return nodes;
 };
 
-/** Whether placing `node` at `at` changes more than the attributes the bindings write. */
+/**
+ * Whether placing `node` at `at` changes more than the attributes the bindings write. Showing or hiding a node isn't
+ * such a change: hidden nodes stay drawn with display none, which the bindings write.
+ */
 const changesWhatIsDrawn = (node: RenderNode, at: Placement) =>
-  node.hidden !== at.hidden ||
   node.mask !== at.mask ||
   node.sprite.customSprite !== at.customSprite ||
   node.sprite.gradientTransform !== at.gradientTransform ||

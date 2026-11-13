@@ -4,7 +4,7 @@ import SvgSprite from "./Sprite";
 import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
-import { PoseBindingsContext } from "./poseBindings";
+import { displayOf, PoseBindingsContext } from "./poseBindings";
 import { bindNodeTransform } from "./Group";
 import { isCut } from "./regions";
 
@@ -18,7 +18,8 @@ export type SvgGroupOutlineProps = {
 
 const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidth, scopeId, opacity }) => {
   const bindings = useContext(PoseBindingsContext);
-  if (g.noSprite || g.hidden || g.sprite.stroke === "none") return null;
+  // A hidden node is still drawn, with display none, so a pose can show it again without a render.
+  if (g.noSprite || g.sprite.stroke === "none") return null;
 
   const transform = matrixTransformToSvg(g.matrix);
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
@@ -42,6 +43,7 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
       fillOverride="none"
       // Without a mask or opacity, the node transform goes straight onto the sprite.
       baseTransform={maskId || opacity !== undefined ? undefined : transform}
+      hidden={maskId || opacity !== undefined ? undefined : g.hidden}
     />
   );
   const content = (
@@ -51,6 +53,7 @@ const SvgGroupOutline: React.FC<SvgGroupOutlineProps> = ({ g, stroke, strokeWidt
         <g
           ref={bindNodeTransform(bindings, g.id)}
           transform={transform}
+          display={displayOf(g)}
           {...(maskId ? spriteMaskAttributes(g.mask!, maskId) : {})}
           opacity={outerStyle ? undefined : opacity}
         >

@@ -160,6 +160,54 @@ describe("setPose", () => {
     expect(rig.markup()).toEqual(renderedMarkup({ ...props, pose: { rotations: { arm: 120 } } }));
   });
 
+  it("shows and hides nodes without a render, as React renders them", () => {
+    const rect = (fill: string) => new SpriteBuilder().setShape("rect").setFill(fill).setStroke("#000000").setStrokeWidth(1).build();
+    const open = (p: Pose) => (p.values?.open ?? 1) > 0.5;
+    // Two versions of an eye, one shown at a time: the open one is a region member that cuts the iris (as a
+    // clip-path) and the lens (as a mask, through its inset), and the closed one carries a child that hides with it.
+    const body = new NodeBuilder("root")
+      .setSprite(rect("#888888"))
+      .addAttachments(
+        new NodeBuilder("eye_open")
+          .setSprite(rect("#ffffff"))
+          .addDriver((p) => ({ visible: open(p) }))
+          .addToRegion("eye")
+          .addToRegion("eye_inset", { inset: true })
+          .build(),
+        new NodeBuilder("iris").setSprite(rect("#3366aa")).setZIndex(1).cutBy("eye").build(),
+        new NodeBuilder("lens").setSprite(rect("#66aa33")).setZIndex(2).cutBy("eye_inset").build(),
+        new NodeBuilder("eye_closed")
+          .setSprite(rect("#aa6633"))
+          .addDriver((p) => ({ visible: !open(p) }))
+          .addAttachments(new NodeBuilder("lash").setSprite(rect("#222222")).setZIndex(3).build())
+          .build(),
+      )
+      .build();
+    const props: RigProps = { body, idPrefix: "blink", effects: { outerOutline: { color: "#ff0000", thickness: 3 } } };
+    const rig = mount(props);
+    const check = (openness: number) => {
+      const pose = { values: { open: openness } };
+      rig.setPose(pose);
+      expect(rig.commits(), `commits at ${openness}`).toBe(1);
+      expect(rig.markup(), `markup at ${openness}`).toEqual(renderedMarkup({ ...props, pose }));
+    };
+    // Hidden nodes stay in the markup, regions included, so there is something to show again.
+    const markup = rig.markup();
+    expect(markup).toContain("<clipPath");
+    expect(markup).toContain("<mask");
+    expect(markup).toContain('data-render-id="eye_closed"');
+    expect(markup).toContain('data-render-id="lash"');
+    check(0.2); // closes: the open eye and its region's members hide, the closed eye and its lash show
+    expect(rig.markup().match(/display="none"/g)?.length ?? 0).toBeGreaterThan(3);
+    check(0.3); // stays closed
+    check(0.9); // opens again
+    check(0.1);
+    // Back to the prop's pose.
+    rig.setPose({});
+    expect(rig.commits()).toBe(1);
+    expect(rig.markup()).toEqual(renderedMarkup(props));
+  });
+
   it("renders when a driver changes a mask, and writes while it keeps one", () => {
     const rect = (fill: string) => new SpriteBuilder().setShape("rect").setFill(fill).setStrokeWidth(0).build();
     const narrow = new SpriteBuilder().setShape("rect").setScale(1, 0.4).build();

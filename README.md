@@ -209,6 +209,7 @@ animator.remove("breathe", { fadeMs: 400 });
 - **Input.** An animation can read anything it closes over, such as a ref to the pointer, and keep state between frames. `damp` eases a value toward a moving target at any frame rate.
 - **One-shots.** `oneShot(durationMs, sample)` plays once and is then dropped. `keyframes` builds a track to sample in it. When the last animation ends, one more frame writes the base pose alone, so the rig goes back to rest.
 - **Values.** Pose values combine by name. Pass `values` rules to the animator: `add` (the default), `min` (e.g. eye openness, so a blink can only close the eyes), `max` or `override`.
+- **Swapping parts.** A driver's `visible` can switch between versions of a part, such as an open and a closed eye. Hidden nodes stay in the markup with `display="none"`, so `setPose` shows and hides them without a React render.
 - **Without React.** `createAnimator` holds no clock and touches no DOM; call `tick(now)` and `apply(base)` yourself, or use `runAnimator` with your own `write`. `layerPose` applies weighted layers to a pose directly.
 
 ## Lower-level APIs
