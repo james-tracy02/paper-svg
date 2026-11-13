@@ -186,6 +186,31 @@ Register a sprite before you call `setCustomSprite` with its id, because the nam
 
 Strokes keep the same width on screen when the SVG is scaled. If you zoom by changing the `viewBox`, set `getZoomVars(zoom)` as the `<svg>` element's `style` so stroke widths follow the zoom.
 
+## Animation
+
+An animation is an object whose `update(dt, time)` returns a `PoseLayer` each frame: rotations and translations to add to the pose, scales to multiply it by, and values. An animator stacks animations, fades them in and out, and layers them onto a base pose. `useAnimator` runs one per frame and writes each frame with `Rig`'s `setPose`, so playing an animation doesn't cost a React render.
+
+```tsx
+import { continuous, oscillate, useAnimator, wave, type RigHandle } from "paper-svg";
+
+const breathe = continuous((time) => ({
+  scales: { torso: { x: 1, y: 1 + 0.02 * wave(time, 4000) } },
+  // Pose rotations aren't mirrored: negate the left side so the arms mirror each other.
+  rotations: { arm_right: oscillate(time, 6000), arm_left: -oscillate(time, 6000) },
+}));
+
+const rig = useRef<RigHandle>(null);
+const animator = useAnimator({ base: () => pose, write: (next) => rig.current?.setPose(next) });
+
+animator.add("breathe", breathe, { fadeMs: 400 });
+animator.remove("breathe", { fadeMs: 400 });
+```
+
+- **Input.** An animation can read anything it closes over, such as a ref to the pointer, and keep state between frames. `damp` eases a value toward a moving target at any frame rate.
+- **One-shots.** `oneShot(durationMs, sample)` plays once and is then dropped. `keyframes` builds a track to sample in it. When the last animation ends, one more frame writes the base pose alone, so the rig goes back to rest.
+- **Values.** Pose values combine by name. Pass `values` rules to the animator: `add` (the default), `min` (e.g. eye openness, so a blink can only close the eyes), `max` or `override`.
+- **Without React.** `createAnimator` holds no clock and touches no DOM; call `tick(now)` and `apply(base)` yourself, or use `runAnimator` with your own `write`. `layerPose` applies weighted layers to a pose directly.
+
 ## Lower-level APIs
 
 | API                                                | Use                                                  |
@@ -202,7 +227,7 @@ Strokes keep the same width on screen when the SVG is scaled. If you zoom by cha
 
 ## Demo
 
-The repository includes a posable puppet that shows joints, mirroring, clipping, constraints, custom sprites and effects:
+The repository includes a posable puppet that shows joints, mirroring, clipping, constraints, custom sprites, effects and animation:
 
 ```sh
 npm install

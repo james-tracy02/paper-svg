@@ -1,6 +1,18 @@
-import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Rig, type ColorTransform, type RigEffects, type Vector2 } from "paper-svg";
+import { useCallback, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent } from "react";
+import { Rig, useAnimator, type ColorTransform, type RigEffects, type RigHandle, type Vector2 } from "paper-svg";
 import { buildScene, DEFAULT_POSE, type Pose } from "./puppet";
+import { followPointer, idle, waveHello } from "./animations";
+
+const ANIMATION_FADE_MS = 400;
+
+// Looping animations, each turned on and off by a checkbox.
+const LOOPS = {
+  idle: { label: "Idle (breathing and sway)", animation: () => idle },
+  follow: { label: "Follow the pointer", animation: followPointer },
+} as const;
+
+type LoopId = keyof typeof LOOPS;
+const loopIds = Object.keys(LOOPS) as LoopId[];
 
 const TOGGLES = {
   clipSash: { label: "Clip sash to torso", initial: true },
@@ -34,6 +46,27 @@ const App = () => {
   const [shirtColor, setShirtColor] = useState("#4f9d69");
   const [balloon, setBalloon] = useState({ x: 125, y: 165 });
   const [toggles, setToggles] = useState(initialToggles);
+  const [loops, setLoops] = useState<Record<LoopId, boolean>>({ idle: false, follow: false });
+
+  // The animations play on top of the dragged pose, which is built into the tree, so their base is
+  // the empty pose. The Rig shows each frame without a React render.
+  const rigRef = useRef<RigHandle>(null);
+  const pointerRef = useRef<Vector2 | null>(null);
+  const animator = useAnimator({ base: () => ({}), write: (pose) => rigRef.current?.setPose(pose) });
+
+  const setLoop = (id: LoopId, on: boolean) => {
+    setLoops((last) => ({ ...last, [id]: on }));
+    if (on) animator.add(id, LOOPS[id].animation(pointerRef), { fadeMs: ANIMATION_FADE_MS });
+    else animator.remove(id, { fadeMs: ANIMATION_FADE_MS });
+  };
+
+  const handleStagePointer = (event: PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    pointerRef.current = {
+      x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      y: ((event.clientY - rect.top) / rect.height) * 2 - 1,
+    };
+  };
 
   const body = useMemo(
     () => buildScene({ pose, shirtColor, balloon, clipSash: toggles.clipSash }),
@@ -72,8 +105,15 @@ const App = () => {
   return (
     <main className="layout">
       <section className="stage">
-        <svg viewBox="-220 -240 440 480" role="img" aria-label="Posable puppet holding a balloon">
+        <svg
+          viewBox="-220 -240 440 480"
+          role="img"
+          aria-label="Posable puppet holding a balloon"
+          onPointerMove={handleStagePointer}
+          onPointerLeave={() => (pointerRef.current = null)}
+        >
           <Rig
+            ref={rigRef}
             body={body}
             mirror={toggles.mirror}
             showPivots={toggles.showPivots}
@@ -89,6 +129,18 @@ const App = () => {
         <p>Drag the head, arms or legs to rotate their joints.</p>
         <button type="button" onClick={() => setPose(DEFAULT_POSE)}>
           Reset pose
+        </button>
+
+        <h2>Animation</h2>
+        <p className="hint">Animations layer onto the pose each frame, so you can keep dragging joints while they play.</p>
+        {loopIds.map((id) => (
+          <label key={id} className="check">
+            <input type="checkbox" checked={loops[id]} onChange={(event) => setLoop(id, event.target.checked)} />
+            {LOOPS[id].label}
+          </label>
+        ))}
+        <button type="button" onClick={() => animator.add("wave", waveHello())}>
+          Wave
         </button>
 
         <h2>Balloon</h2>

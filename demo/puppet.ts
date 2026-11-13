@@ -83,7 +83,7 @@ const arm = (side: Side, { pose }: PuppetOptions): Node => {
 
 const leg = (side: Side, { pose }: PuppetOptions): Node => {
   const foot = new NodeBuilder("foot")
-    .moveBy(6, -72)
+    .moveBy(8, -72)
     .setSprite(paint.setFill(OUTLINE).setShape("ellipse").setScale(3.4, 1.5).build())
     .buildSide(side);
 
