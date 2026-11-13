@@ -4,18 +4,31 @@ import { continuous, damp, keyframes, linear, oneShot, oscillate, wave, type Ani
  * The puppet breathes: the head bobs, the arms sway and the ears flop, each on its own period so the
  * loop doesn't read as one motion. Pose rotations aren't mirrored, so the left side's are negated for
  * the two sides to mirror each other.
+ *
+ * The balloon drifts on a loop of two periods, bobbing up from where it was put, leans back against
+ * the way it's moving, and swells a little. The string and eyes aim at it, so they follow.
  */
 export const idle: Animation = continuous((time) => {
   const breath = wave(time, 3600);
   const sway = oscillate(time, 5200);
+  // Its velocity across: a sine's is the same sine a quarter period on.
+  const drift = oscillate(time, 7000);
+  const driftVelocity = oscillate(time, 7000, 0.25);
+  const swell = wave(time, 3000);
   return {
-    translations: { head: { x: 0, y: breath * 2 } },
+    translations: {
+      head: { x: 0, y: breath * 2 },
+      // Only up from where it was put, so it never sinks onto the hand.
+      balloon: { x: drift * 28, y: wave(time, 4600) * 22 },
+    },
     rotations: {
       arm_right: sway * 3,
       arm_left: -(sway * 3 - breath * 2),
       ear_right: oscillate(time, 2600) * 5,
       ear_left: -oscillate(time, 2600, 0.25) * 5,
+      balloon: -driftVelocity * 9,
     },
+    scales: { balloon: { x: 1 + swell * 0.06, y: 1 + swell * 0.04 } },
   };
 });
 
