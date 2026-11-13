@@ -116,10 +116,15 @@ const customSpriteBounds = (custom: CustomSprite): Bounds | null => {
   return bounds;
 };
 
-/** What `sprite` draws, in the space its own transform is applied in (its node's), unpadded. */
-const spriteLocalBounds = (sprite: Sprite): { bounds: Bounds; space: MatrixTransform } | null => {
+/**
+ * What `sprite` draws, in the space its own transform is applied in (its node's), unpadded. `inMask`: as drawn in a
+ * mask, where `maskScale` applies.
+ */
+const spriteLocalBounds = (sprite: Sprite, inMask: boolean): { bounds: Bounds; space: MatrixTransform } | null => {
   const spriteMatrix = spriteTransformToMatrix(
-    sprite.maskScale ? { ...sprite, scale: { x: sprite.scale.x * sprite.maskScale.x, y: sprite.scale.y * sprite.maskScale.y } } : sprite,
+    inMask && sprite.maskScale
+      ? { ...sprite, scale: { x: sprite.scale.x * sprite.maskScale.x, y: sprite.scale.y * sprite.maskScale.y } }
+      : sprite,
   );
   // The order SvgSprite picks what to draw in.
   if (sprite.href) return { bounds: box(-IMAGE_SIZE / 2, -IMAGE_SIZE / 2, IMAGE_SIZE / 2, IMAGE_SIZE / 2), space: spriteMatrix };
@@ -147,9 +152,26 @@ const spriteLocalBounds = (sprite: Sprite): { bounds: Bounds; space: MatrixTrans
  * own space). Null when it draws nothing measurable.
  */
 export const getSpriteMaskBounds = (sprite: Sprite, matrix?: MatrixTransform): Bounds | null => {
-  const local = spriteLocalBounds(sprite);
+  const local = spriteLocalBounds(sprite, true);
   if (!local) return null;
   return transformBounds(local.bounds, matrix ? combineMatrixTransforms(matrix, local.space) : local.space);
+};
+
+/**
+ * What the nodes in render group `groupId` draw, in the space the rig is drawn in (inside `Rig`'s scale and
+ * mirror), from their sprites' geometry: what `getBBox` on the group's element measures, without a layout. Strokes
+ * are left out, as `getBBox` leaves them out. Pass the nodes as posed (`useRenderNodes`, `LivePoser.nodes`), so the
+ * bounds follow the pose. Null when no node in the group draws.
+ */
+export const getRenderGroupBounds = (nodes: readonly RenderNode[], groupId: string): Bounds | null => {
+  let bounds: Bounds | null = null;
+  for (const node of nodes) {
+    // An outline node draws its owner's shape again.
+    if (node.renderGroup?.id !== groupId || node.noSprite || node.hidden || node.outlineOf) continue;
+    const local = spriteLocalBounds(node.sprite, false);
+    if (local) bounds = union(bounds, transformBounds(local.bounds, combineMatrixTransforms(node.matrix, local.space)));
+  }
+  return bounds;
 };
 
 /** Padding around a mask's content: room for strokes, which the geometry doesn't include. */

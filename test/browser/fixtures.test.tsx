@@ -15,7 +15,18 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { CSSProperties } from "react";
-import { getZoomVars, makeSprite, NodeBuilder, registerCustomSprite, Rig, SpriteBuilder, type Node, type RigProps } from "../../src";
+import {
+  getRenderGroupBounds,
+  getZoomVars,
+  makeSprite,
+  NodeBuilder,
+  registerCustomSprite,
+  Rig,
+  SpriteBuilder,
+  type Node,
+  type RigProps,
+} from "../../src";
+import { poseTree } from "../../src/render/posedRig";
 import { upgradeFixture, type RigFixture } from "../fixtures/RigFixture";
 import { buildScene, DEFAULT_POSE, STAR_SPRITE_ID, STAR_SVG } from "../../demo/puppet";
 
@@ -242,6 +253,44 @@ describe("drivers", () => {
     for (const ref of refs) expect(svg.querySelector(ref!), `${ref} is defined`).not.toBeNull();
     expect([...svg.querySelectorAll("defs path")].map((path) => path.getAttribute("d"))).toContain(closed.elements[0].d);
   });
+});
+
+describe("render group bounds", () => {
+  // project-k grounds a character and sizes its shadow from its bounding_box render group (plain shapes).
+  for (const [path, fixture] of Object.entries(fixtures)) {
+    const name = path.split("/").pop()!.replace(/\.rig\.json$/, "");
+    it(`match getBBox on ${name}'s bounding_box group, posed or not`, async () => {
+      const props = fixtureProps(fixture);
+      const poses = [
+        undefined,
+        { rotations: { torso: 15, leg_right: 30, leg_left: -25, lowerleg_right: 40, foot_left: 20, head: -20 } },
+      ];
+      for (const pose of poses) {
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        cleanups.push(() => {
+          root.unmount();
+          host.remove();
+        });
+        flushSync(() =>
+          root.render(
+            <svg xmlns={SVG_NS} width={800} height={1000} viewBox="-200 -250 400 500">
+              <Rig {...props} pose={pose} />
+            </svg>,
+          ),
+        );
+        const group = host.querySelector<SVGGraphicsElement>('[id="render_group_bounding_box"]');
+        expect(group).not.toBeNull();
+        const measured = group!.getBBox();
+        const computed = getRenderGroupBounds(poseTree(props.body, pose).nodes, "bounding_box");
+        expect(computed).not.toBeNull();
+        const round = (b: { x: number; y: number; width: number; height: number }) =>
+          [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 100) / 100);
+        expect(round(computed!)).toEqual(round(measured));
+      }
+    });
+  }
 });
 
 describe("mask regions", () => {
