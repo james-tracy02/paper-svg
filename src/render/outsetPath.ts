@@ -7,7 +7,7 @@ let initialized = false;
  * Lazily initialize paper.js with a headless canvas.
  * Must be called before any paper.Path construction.
  */
-const ensureSetup = () => {
+export const ensureSetup = () => {
   if (initialized) return;
   paper.setup(new paper.Size(1, 1));
   initialized = true;
