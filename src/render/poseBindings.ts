@@ -85,6 +85,12 @@ export const joinRefs =
   (element: E | null) =>
     refs.forEach((ref) => ref?.(element));
 
+/**
+ * The `display` a node's elements take: none while a driver hides it. Hidden nodes stay in the markup so a pose can
+ * show them again without a render; their elements' writers keep this attribute in step.
+ */
+export const displayOf = (node: Pick<RenderNode, "hidden">) => (node.hidden ? "none" : undefined);
+
 /** Sets an attribute only when it differs, or removes it for undefined. */
 export const setAttr = (element: Element, name: string, value: string | number | undefined) => {
   if (value === undefined) {
@@ -108,6 +114,8 @@ export const prefixWriter =
     const rest = rendered.slice(base.length);
     return (get) => {
       const node = get(id);
-      if (node) setAttr(element, attribute, format(node) + rest);
+      if (!node) return;
+      setAttr(element, attribute, format(node) + rest);
+      setAttr(element, "display", displayOf(node));
     };
   };

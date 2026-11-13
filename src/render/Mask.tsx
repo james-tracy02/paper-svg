@@ -8,7 +8,7 @@ import { getSpriteSignature } from "./utils/getSpriteSignature";
 import { fillCuts, membership } from "./regions";
 import type { RegionForms, RegionShape } from "./layerPlan";
 import { getMaskRegion, type Bounds } from "./spriteBounds";
-import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
+import { bindPose, displayOf, PoseBindingsContext, setAttr } from "./poseBindings";
 import { bindNodeTransform } from "./Group";
 
 /** A mask's region attributes: its members' bounds, or the default region when they have none. */
@@ -126,6 +126,7 @@ const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
         // A sprite mask is in node space, so only then does the node transform need its own <g>.
         baseTransform={spriteMaskId ? undefined : transform}
         poseNode={node.id}
+        hidden={spriteMaskId ? undefined : node.hidden}
       />
     );
     return spriteMaskId ? (
@@ -133,6 +134,7 @@ const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
         key={`${node.id}_${mode}`}
         ref={bindNodeTransform(bindings, node.id)}
         transform={transform}
+        display={displayOf(node)}
         {...spriteMaskAttributes(node.mask!, spriteMaskId)}
       >
         {sprite}
@@ -162,7 +164,8 @@ const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
       ))}
       <mask ref={bindRegion()} id={id} {...maskAttributes}>
         <g>
-          {members.map((node) => (node.noSprite || node.hidden ? null : wrapInCuts(node, renderMember(node))))}
+          {/* Hidden members stay, with display none, so a pose can show them again without a render. */}
+          {members.map((node) => (node.noSprite ? null : wrapInCuts(node, renderMember(node))))}
         </g>
       </mask>
     </>

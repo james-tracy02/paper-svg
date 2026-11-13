@@ -6,7 +6,7 @@ import { clipElements, uniteClipElements } from "./unitePaths";
 import type { RegionDef } from "./layerPlan";
 import { membership } from "./regions";
 import type { RenderNode } from "./RenderTree";
-import { bindPose, PoseBindingsContext, prefixWriter, setAttr, type PoseBindings } from "./poseBindings";
+import { bindPose, displayOf, joinRefs, PoseBindingsContext, prefixWriter, setAttr, type PoseBindings } from "./poseBindings";
 
 const CLIP_PRECISION = 3;
 const clipNodeTransform = (node: RenderNode) => matrixTransformToSvg(node.matrix, CLIP_PRECISION);
@@ -20,14 +20,18 @@ type BindClip = (
 const clipBinder =
   (bindings: PoseBindings | null, node: RenderNode): BindClip =>
   (rendered, path) =>
-    bindPose<Element>(bindings, node.id, (element) => {
-      const writeTransform = prefixWriter(node.id, "transform", clipNodeTransform(node), rendered, clipNodeTransform)(element);
-      return (get) => {
-        writeTransform(get);
-        const posed = path && get(node.id);
-        if (posed) setAttr(element, "d", path(posed));
-      };
-    });
+    joinRefs<Element>(
+      bindPose<Element>(bindings, node.id, (element) => {
+        const writeTransform = prefixWriter(node.id, "transform", clipNodeTransform(node), rendered, clipNodeTransform)(element);
+        return (get) => {
+          writeTransform(get);
+          const posed = path && get(node.id);
+          if (posed) setAttr(element, "d", path(posed));
+        };
+      }),
+      // A hidden member stays in the clip-path with display none, which leaves it out of the clip (see displayOf).
+      (element) => element && setAttr(element, "display", displayOf(node)),
+    );
 
 /**
  * Render a bare shape element for use inside <clipPath>.
@@ -112,7 +116,8 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ defs }) => {
       {defs.map((def) => (
         <clipPath key={def.key} id={def.id} clipPathUnits="userSpaceOnUse">
           {def.nodes.map((node) => {
-            if (node.noSprite || node.hidden) return null;
+            // Hidden members stay under a Rig, so a pose can show them again without a render.
+            if (node.noSprite || (node.hidden && !bindings)) return null;
             if (node.outlineOf !== undefined && def.nodes.some((owner) => owner.id === node.outlineOf)) return null;
             const nodeTransform = clipNodeTransform(node);
             const spriteTransform = getSpriteTransform(node.sprite, CLIP_PRECISION);

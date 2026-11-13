@@ -40,6 +40,12 @@ type SvgSpriteProps = {
    * and `baseTransform` when given, which must then be the node's `matrixTransformToSvg(matrix)`.
    */
   poseNode?: string;
+  /**
+   * The node is hidden by a driver (see `displayOf`). With `poseNode` and `baseTransform` under a `Rig`, the element
+   * carrying the transform takes display none, and the pose shows it again without a render; otherwise nothing is
+   * drawn.
+   */
+  hidden?: boolean;
 };
 
 /** A ref callback for the element carrying the sprite's transform, given the transform it rendered. */
@@ -79,12 +85,20 @@ const SvgSpriteComponent: React.FC<SvgSpriteProps> = ({
   strokeWidthOverride,
   baseTransform,
   poseNode,
+  hidden,
 }) => {
   const bindings = useContext(PoseBindingsContext);
-  const bindTransform: BindTransform | undefined =
-    bindings && poseNode && baseTransform
-      ? (rendered) => bindPose(bindings, poseNode, prefixWriter(poseNode, "transform", baseTransform, rendered, nodeTransform))
-      : undefined;
+  const live = Boolean(bindings && poseNode && baseTransform);
+  const display = hidden ? "none" : undefined;
+  // The element's display is set as it attaches, with the transform it carries, so every shape below gets it
+  // without a prop of its own; the pose's writer keeps it in step after.
+  const bindTransform: BindTransform | undefined = live
+    ? (rendered) =>
+        joinRefs<Element>(
+          bindPose(bindings, poseNode!, prefixWriter(poseNode!, "transform", baseTransform!, rendered, nodeTransform)),
+          (element) => element && setAttr(element, "display", display),
+        )
+    : undefined;
   const mask = isMaskMode(mode);
   const transformStr = [baseTransform, getTransformForMode(sprite, mode)].filter(Boolean).join(" ");
   const lineJoin = sprite.lineJoin ?? "round";
@@ -145,6 +159,9 @@ const SvgSpriteComponent: React.FC<SvgSpriteProps> = ({
   const resolvedBaseFill = fillOverride ?? (sprite.customSprite ? baseFill : (gradientFill ?? baseFill));
   const normalizedShape = sprite.shape ?? "ellipse";
   const transform = transformStr || undefined;
+
+  // After the hooks, so hiding doesn't change their order. Without a live element to toggle, a hidden node draws nothing.
+  if (hidden && !live) return null;
 
   if (sprite.href) {
     return withDefs(<ImageSprite transform={transform} href={sprite.href} bindTransform={bindTransform} />);
@@ -286,6 +303,7 @@ const SvgSprite = React.memo(SvgSpriteComponent, (prev, next) => {
   if (prev.fillOverride !== next.fillOverride) return false;
   if (prev.baseTransform !== next.baseTransform) return false;
   if (prev.poseNode !== next.poseNode) return false;
+  if (prev.hidden !== next.hidden) return false;
   const a = prev.sprite;
   const b = next.sprite;
   if (a === b) return true; // same reference

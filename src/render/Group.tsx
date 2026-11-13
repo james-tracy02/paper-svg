@@ -5,7 +5,7 @@ import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
 import { getFillWrapTargets, RegionFormsContext, wrapFill } from "./fillWrappers";
-import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
+import { bindPose, displayOf, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
 import { isCut, outlineCuts } from "./regions";
 
 export type SvgGroupProps = {
@@ -25,11 +25,16 @@ export type SvgGroupProps = {
   skipFillWrappers?: boolean;
 };
 
-/** Binds an element whose transform is node `id`'s matrix to the pose. */
+/**
+ * Binds an element whose transform is node `id`'s matrix to the pose: its transform, and its `display` as a driver
+ * shows or hides the node (render it with `display={displayOf(node)}`).
+ */
 export const bindNodeTransform = (bindings: PoseBindings | null, id: string, precision?: number) =>
   bindPose<Element>(bindings, id, (element) => (get) => {
     const node = get(id);
-    if (node) setAttr(element, "transform", matrixTransformToSvg(node.matrix, precision));
+    if (!node) return;
+    setAttr(element, "transform", matrixTransformToSvg(node.matrix, precision));
+    setAttr(element, "display", displayOf(node));
   });
 
 const jointChain = (node: RenderNode) => {
@@ -54,9 +59,11 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
 }) => {
   const bindings = useContext(PoseBindingsContext);
   const forms = useContext(RegionFormsContext);
-  if (g.noSprite || g.hidden) return null;
+  // A hidden node is still drawn, with display none, so a pose can show it again without a render.
+  if (g.noSprite) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
+  const display = displayOf(g);
   const articulated = Boolean(g.pointerEventsTarget) || g.parent?.articulated || g.articulated;
   const rotateTarget = g.pointerEventsTarget ? { ...(g.parent ?? g), id: g.pointerEventsTarget } : (g.parent ?? g);
   const rotates = articulated && !onSelectAttachment;
@@ -112,6 +119,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         <g
           key={`${g.id}_hit`}
           transform={transform}
+          display={display}
           ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
           onPointerDown={onSelectAttachment}
           data-render-hit={g.id}
@@ -134,6 +142,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
       <g
         key={g.id}
         transform={transform}
+        display={display}
         // Opacity multiplies like the fill's masks and clip-paths, so it can sit here instead of on an outer <g>.
         opacity={outerStyle ? undefined : opacity}
         mask={spriteMask.mask}
@@ -187,6 +196,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
       <g
         key={`${g.id}_outline`}
         transform={transform}
+        display={display}
         mask={maskId ? `url(#${maskId}_outline)` : undefined}
         data-render-id={`${g.id}_outline`}
         ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
