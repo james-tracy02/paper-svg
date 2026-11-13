@@ -17,8 +17,6 @@ export type RigFixture = {
   /** `getRenderGroupOptions` results for every render group in `body`. */
   renderGroupOptions: Record<string, RenderGroupOptions>;
   effects: Omit<RigEffects, "isHidden">;
-  /** Nodes with one of these `renderGroupTag`s are hidden. */
-  hiddenRenderGroupTags: string[];
 };
 
 /** Version 1 `Node` field names and their current names. Old and new names overlap, so map in one pass. */
@@ -60,7 +58,6 @@ const V2_GROUPS: Record<string, [group: string, name: string]> = {
   patternSpace: ["paint", "patternSpace"],
   gradientSpace: ["paint", "gradientSpace"],
   renderGroup: ["paint", "renderGroup"],
-  renderGroupTag: ["paint", "renderGroupTag"],
   outlineZIndex: ["outline", "zIndex"],
   maskOutline: ["outline", "masked"],
   disableOutlineHoisting: ["outline", "disableHoisting"],
@@ -69,7 +66,7 @@ const V2_GROUPS: Record<string, [group: string, name: string]> = {
   pointerEventsTarget: ["interaction", "target"],
 };
 /** Version 2 fields nothing reads any more. */
-const V2_DROPPED = new Set(["fixedSize", "fixedSkew"]);
+const V2_DROPPED = new Set(["fixedSize", "fixedSkew", "renderGroupTag"]);
 
 const upgradeV2Node = (node: Record<string, unknown>): Node => {
   const upgraded: Record<string, Record<string, unknown> | unknown> = {};

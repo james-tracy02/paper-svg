@@ -12,6 +12,11 @@ import { createRigPoser, isPlacedAt, placementOf, type Placement, type PosedRig,
 import { createPoseBindings, type PoseBindings } from "./poseBindings";
 import type { RenderNode } from "./RenderTree";
 
+/**
+ * Writes poses straight to the DOM, without a React render. `Rig` makes its own (see `RigHandle.setPose`);
+ * with `RigLayers`, make one, pass it as `livePose`, and call `write` per frame. When `write` returns false,
+ * render `useRenderNodes` with that pose instead. Commit the final pose through React when the gesture ends.
+ */
 export type LivePoser = {
   /** What the rig's elements register their writers with. */
   readonly bindings: PoseBindings;

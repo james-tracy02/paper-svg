@@ -135,17 +135,13 @@ const expectRigSnapshot = async (name: string, props: RigProps) => {
 
 const fixtureProps = (exported: RigFixture): RigProps => {
   const fixture = upgradeFixture(exported);
-  const hiddenTags = new Set(fixture.hiddenRenderGroupTags);
   return {
     body: fixture.body,
     scale: fixture.scale,
     mirror: fixture.mirror,
     idPrefix: "fixture",
     getRenderGroupOptions: (id) => fixture.renderGroupOptions[id],
-    effects: {
-      ...fixture.effects,
-      isHidden: hiddenTags.size ? (node) => hiddenTags.has(node.renderGroupTag ?? "") : undefined,
-    },
+    effects: fixture.effects,
   };
 };
 

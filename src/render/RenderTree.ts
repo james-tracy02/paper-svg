@@ -43,7 +43,6 @@ export type RenderNode = {
   patternSpace?: MatrixTransform;
   pointerEvents?: boolean;
   pointerEventsTarget?: string;
-  renderGroupTag?: string;
   renderGroup?: RenderGroup;
   blendMode?: CSSProperties["mixBlendMode"];
   /** Draws this node's outline as its own layer, tracing the outlines of the regions it's cut by (`traceOutline`). */
@@ -140,7 +139,6 @@ const createRenderNode = (
     pattern: body.sprite.pattern,
     patternFills: body.sprite.patternFills,
     patternSpace: body.sprite.pattern ? solution.patternSpaces[index] : undefined,
-    renderGroupTag: paint.renderGroupTag,
     renderGroup: paint.renderGroup,
     blendMode: paint.blendMode,
     traceOutline,
