@@ -106,6 +106,8 @@ type V3Node = Record<string, unknown> & {
   inheritGroupsForChildren?: boolean;
   stopInheritedGroups?: boolean;
   clipMaskContribution?: boolean;
+  /** Always empty: nothing set it. */
+  parentMaskedBy?: string[];
   joints?: V3Node[];
   attachments?: V3Node[];
 };
@@ -125,7 +127,7 @@ const upgradeV3Node = (node: V3Node): Node => {
   const {
     maskedBy, clippedBy, outlineMaskedBy, outlineClippedBy, maskGroups, maskGroupModes, maskOutsets, clippingGroups,
     clipOutsets, inheritMaskingForChildren, stopInheritedMasking, inheritGroupsForChildren, stopInheritedGroups,
-    clipMaskContribution, joints, attachments, paint, outline, ...rest
+    clipMaskContribution, parentMaskedBy: _parentMaskedBy, joints, attachments, paint, outline, ...rest
   } = node;
   const joins = [
     ...(maskGroups ?? []).map((region) =>
