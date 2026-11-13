@@ -69,6 +69,29 @@ export { bakePose } from "./render/pose";
 export { resolveRotationPivot } from "./render/rotationPivot";
 export type { RotationPivotOptions } from "./render/rotationPivot";
 
+/* ---- animation ---- */
+export type { Animation, PoseLayer, ValueCombine, ValueRules, WeightedLayer } from "./types/Animation";
+export { layerPose } from "./animation/layerPose";
+export { createAnimator } from "./animation/animator";
+export type { Animator, AnimatorOptions, AddOptions, FadeOptions } from "./animation/animator";
+export { runAnimator } from "./animation/runAnimator";
+export type { FrameScheduler, RunAnimatorOptions } from "./animation/runAnimator";
+export { useAnimator } from "./animation/useAnimator";
+export type { UseAnimatorOptions } from "./animation/useAnimator";
+export {
+  linear,
+  easeIn,
+  easeOut,
+  easeInOut,
+  wave,
+  oscillate,
+  damp,
+  keyframes,
+  oneShot,
+  continuous,
+} from "./animation/helpers";
+export type { Easing, Keyframe, Track } from "./animation/helpers";
+
 /* ---- color transform (e.g. lighting) ---- */
 export { ColorTransformProvider, useColorTransform } from "./render/context/ColorTransformContext";
 export type { ColorTransform } from "./render/context/ColorTransformContext";
