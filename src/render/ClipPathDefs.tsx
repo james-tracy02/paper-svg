@@ -2,6 +2,7 @@ import React, { useContext } from "react";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import type { Sprite } from "../types/Sprite";
 import { outsetPathData } from "./outsetPath";
+import { clipElements, uniteClipElements } from "./unitePaths";
 import type { RegionDef } from "./layerPlan";
 import { membership } from "./regions";
 import type { RenderNode } from "./RenderTree";
@@ -49,17 +50,15 @@ const renderClipElement = (
   const shape = sprite.shape ?? "ellipse";
 
   if (sprite.customSprite) {
-    const allowed = sprite.clipPathIndices?.length ? new Set(sprite.clipPathIndices) : null;
-    const customRootTransform = getSpriteTransform(sprite.customSprite, 4);
-    return sprite.customSprite.elements.map((el, i) => {
-      if (allowed && !allowed.has(i)) return null;
-      if (!el.d) return null;
-      if (el.noFill) return null;
-      const resolvedFill = el.colorKey ? (sprite.colors?.[el.colorKey] ?? sprite.fill) : sprite.fill;
-      if (!resolvedFill || resolvedFill === "none") return null;
-      const t = [combinedTransform, customRootTransform, el.transform].filter(Boolean).join(" ");
-      const d = outset ? outsetPathData(el.d, outset) : el.d;
-      return <path key={`${key}_${i}`} ref={bind(t)} d={d} transform={t} />;
+    const { elements } = sprite.customSprite;
+    const rootTransform = [combinedTransform, getSpriteTransform(sprite.customSprite, 4)].join(" ");
+    const outsetPath = (d: string) => (outset ? outsetPathData(d, outset) : d);
+    // Several filled elements draw as one path, merged once, so the browser never merges their shared edges.
+    const united = uniteClipElements(elements, sprite.clipPathIndices);
+    if (united) return <path key={key} ref={bind(rootTransform)} d={outsetPath(united)} transform={rootTransform} />;
+    return clipElements(elements, sprite.clipPathIndices).map(({ element, index }) => {
+      const t = [rootTransform, element.transform].filter(Boolean).join(" ");
+      return <path key={`${key}_${index}`} ref={bind(t)} d={outsetPath(element.d!)} transform={t} />;
     });
   }
   if (sprite.dynamicPath) {
@@ -96,7 +95,14 @@ type ClipPathDefsProps = {
   defs: RegionDef[];
 };
 
-/** Region shapes as <clipPath>s: each member's shape, whatever its fill or colours (see regions.ts). */
+/**
+ * Region shapes as <clipPath>s: each member's shape, whatever its fill or colours (see regions.ts).
+ *
+ * An outline node shares its owner's shape and region joins, so both are members. A clip-path draws only shapes,
+ * so the outline node is skipped when its owner is drawn too: Chromium unions a clip-path's children into one
+ * path, and two exactly coincident copies of a shape make that union fail at some transforms, leaving the
+ * clip-path dropping most of its area (a thigh's sock vanishing at one abdomen angle).
+ */
 const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ defs }) => {
   const bindings = useContext(PoseBindingsContext);
   if (defs.length === 0) return null;
@@ -107,6 +113,7 @@ const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ defs }) => {
         <clipPath key={def.key} id={def.id} clipPathUnits="userSpaceOnUse">
           {def.nodes.map((node) => {
             if (node.noSprite || node.hidden) return null;
+            if (node.outlineOf !== undefined && def.nodes.some((owner) => owner.id === node.outlineOf)) return null;
             const nodeTransform = clipNodeTransform(node);
             const spriteTransform = getSpriteTransform(node.sprite, CLIP_PRECISION);
             const sprite = { ...node.sprite, fill: "white", colors: {} };
