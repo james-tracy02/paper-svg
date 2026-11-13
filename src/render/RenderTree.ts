@@ -8,6 +8,8 @@ import { getSpriteSignature } from "./utils/getSpriteSignature";
 import type { RenderGroup } from "../types/RenderGroup";
 import { createOutlineNode } from "./outline";
 import { createRig, solvePose, type Pose, type PoseSolution, type Rig } from "./pose";
+import { resolveRegions, type RegionCut, type RegionMember } from "./regions";
+import type { RegionJoin } from "../types/Node";
 
 export type RenderNode = {
   id: string;
@@ -27,16 +29,10 @@ export type RenderNode = {
   /** For articulated nodes: the nearest articulated ancestor, whose rotation carries this one along. */
   jointParent?: RenderNode;
   mask?: Sprite;
-  clip?: Sprite;
-  maskedBy?: string[];
-  outlineMaskedBy?: string[];
-  maskGroups?: string[];
-  maskGroupModes?: Record<string, "positive" | "negative">;
-  maskOutsets?: Record<string, number>;
-  clippedBy?: string[];
-  outlineClippedBy?: string[];
-  clippingGroups?: string[];
-  clipOutsets?: Record<string, number>;
+  /** Regions this node's shape joins (see regions.ts). */
+  regions?: RegionMember[];
+  /** Regions cutting this node's fill or the outline it traces. */
+  cuts?: RegionCut[];
   /** This node's separate outline node, when its stroke is drawn as one (see `outlineOf`). */
   linkedOutline?: RenderNode;
   /** On an outline node: the id of the node whose stroke it draws. */
@@ -50,9 +46,8 @@ export type RenderNode = {
   renderGroupTag?: string;
   renderGroup?: RenderGroup;
   blendMode?: CSSProperties["mixBlendMode"];
-  maskOutline?: boolean;
-  disableOutlineHoisting?: boolean;
-  clipMaskContribution?: boolean;
+  /** Draws this node's outline as its own layer, tracing the outlines of the regions it's cut by (`traceOutline`). */
+  traceOutline?: boolean;
   opacity?: number;
 
   // debug
@@ -88,11 +83,9 @@ type RenderOptions = {
   zIndex: number;
   parent?: RenderNode;
   opacity?: number;
-  parentMaskedBy?: string[];
-  parentClippedBy?: string[];
-  parentMaskGroups?: string[];
-  parentClippingGroups?: string[];
-  parentMaskGroupModes?: Record<string, "positive" | "negative">;
+  /** Region joins and cuts passed down by ancestors (`joinsForChildren`, `cutsForChildren`). */
+  parentJoins?: RegionJoin[];
+  parentCuts?: string[];
 };
 
 /** The solved pose, and the rig entry the walk is at: the walk visits nodes in rig entry order. */
@@ -124,14 +117,10 @@ const createRenderNode = (
   opts: RenderOptions,
   zIndex: number,
 ): RenderNode => {
-  const mergedMaskedBy = [...(body.maskedBy ?? []), ...(body.parentMaskedBy ?? []), ...(opts.parentMaskedBy ?? [])];
-  const mergedClippedBy = [...(body.clippedBy ?? []), ...(opts.parentClippedBy ?? [])];
-  const mergedMaskGroups = [...(body.maskGroups ?? []), ...(opts.parentMaskGroups ?? [])];
-  const mergedClippingGroups = [...(body.clippingGroups ?? []), ...(opts.parentClippingGroups ?? [])];
-  const mergedMaskGroupModes =
-    opts.parentMaskGroupModes || body.maskGroupModes
-      ? { ...(opts.parentMaskGroupModes ?? {}), ...(body.maskGroupModes ?? {}) }
-      : undefined;
+  const { regions, cuts, traceOutline } = resolveRegions(body, {
+    joins: [...(body.regions?.joins ?? []), ...(opts.parentJoins ?? [])],
+    cuts: [...(body.regions?.cuts ?? []), ...(opts.parentCuts ?? [])],
+  });
   const paint = body.paint ?? {};
 
   const node: RenderNode = {
@@ -146,25 +135,15 @@ const createRenderNode = (
     noSprite: paint.noSprite,
     hidden: solution.hidden[index] || undefined,
     mask: solution.masks[index] === undefined ? paint.mask : (solution.masks[index] ?? undefined),
-    clip: paint.clip,
-    maskedBy: mergedMaskedBy,
-    outlineMaskedBy: body.outlineMaskedBy,
-    maskGroups: mergedMaskGroups.length ? mergedMaskGroups : undefined,
-    maskGroupModes: mergedMaskGroupModes,
-    clippedBy: mergedClippedBy,
-    outlineClippedBy: body.outlineClippedBy,
-    clippingGroups: mergedClippingGroups.length ? mergedClippingGroups : undefined,
-    clipOutsets: body.clipOutsets,
-    maskOutsets: body.maskOutsets,
+    regions,
+    cuts,
     pattern: body.sprite.pattern,
     patternFills: body.sprite.patternFills,
     patternSpace: body.sprite.pattern ? solution.patternSpaces[index] : undefined,
     renderGroupTag: paint.renderGroupTag,
     renderGroup: paint.renderGroup,
     blendMode: paint.blendMode,
-    maskOutline: body.outline?.masked,
-    disableOutlineHoisting: body.outline?.disableHoisting,
-    clipMaskContribution: body.clipMaskContribution,
+    traceOutline,
     opacity: paint.opacity ?? opts.opacity,
     pointerEvents: body.interaction?.pointerEvents,
     pointerEventsTarget: body.interaction?.target,
@@ -180,46 +159,20 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
   ctx.next += 1;
   const opts: RenderOptions = { ...DEFAULT_OPTIONS, ...renderOpts };
 
-  // `stopInheritedMasking`/`stopInheritedGroups` break the inheritance chain at this node:
-  // whatever was being passed down from an ancestor is discarded here, so neither this
-  // node nor its descendants receive it (descendants stop receiving it because the break
-  // happens before we compute what gets passed further down).
-  const effectiveParentMaskedBy = body.stopInheritedMasking ? undefined : opts.parentMaskedBy;
-  const effectiveParentClippedBy = body.stopInheritedMasking ? undefined : opts.parentClippedBy;
-  const effectiveParentMaskGroups = body.stopInheritedGroups ? undefined : opts.parentMaskGroups;
-  const effectiveParentClippingGroups = body.stopInheritedGroups ? undefined : opts.parentClippingGroups;
-  const effectiveParentMaskGroupModes = body.stopInheritedGroups ? undefined : opts.parentMaskGroupModes;
-
-  // When `inheritMaskingForChildren` is set, this node's own maskedBy/clippedBy values are
-  // folded into what gets passed down to every descendant joint/attachment, on top of
-  // whatever was already being inherited from further up the tree.
-  const inheritedMaskedBy = body.inheritMaskingForChildren ? (body.maskedBy ?? []) : [];
-  const inheritedClippedBy = body.inheritMaskingForChildren ? (body.clippedBy ?? []) : [];
-  const childParentMaskedBy = [...(effectiveParentMaskedBy ?? []), ...(body.parentMaskedBy ?? []), ...inheritedMaskedBy];
-  const childParentClippedBy = [...(effectiveParentClippedBy ?? []), ...inheritedClippedBy];
-  const nextParentMaskedBy = childParentMaskedBy.length ? childParentMaskedBy : undefined;
-  const nextParentClippedBy = childParentClippedBy.length ? childParentClippedBy : undefined;
-
-  // When `inheritGroupsForChildren` is set, this node's own maskGroups/clippingGroups
-  // (and their maskGroupModes) are folded into what gets passed down to every descendant
-  // joint/attachment, on top of whatever was already being inherited from further up the
-  // tree — making every descendant also contribute to those same mask/clip groups.
-  const inheritedMaskGroups = body.inheritGroupsForChildren ? (body.maskGroups ?? []) : [];
-  const inheritedClippingGroups = body.inheritGroupsForChildren ? (body.clippingGroups ?? []) : [];
-  const inheritedMaskGroupModes = body.inheritGroupsForChildren ? body.maskGroupModes : undefined;
-  const childParentMaskGroups = [...(effectiveParentMaskGroups ?? []), ...inheritedMaskGroups];
-  const childParentClippingGroups = [
-    ...(effectiveParentClippingGroups ?? []),
-    ...inheritedClippingGroups,
+  // `stopInheritedRegions`/`stopInheritedCuts` break the inheritance chain at this node: what was passed down is
+  // dropped here, for this node and, since it isn't passed on, its descendants.
+  const regionOptions = body.regions ?? {};
+  const parentJoins = regionOptions.stopInheritedRegions ? undefined : opts.parentJoins;
+  const parentCuts = regionOptions.stopInheritedCuts ? undefined : opts.parentCuts;
+  // `regionsForChildren`/`cutsForChildren` add this node's own joins and cuts to what its descendants receive.
+  // An outset belongs to the node that set it, so a passed-down join drops it.
+  const childJoins = [
+    ...(parentJoins ?? []),
+    ...(regionOptions.regionsForChildren ? (regionOptions.joins ?? []).map(({ outset: _, ...join }) => join) : []),
   ];
-  const childParentMaskGroupModes =
-    effectiveParentMaskGroupModes || inheritedMaskGroupModes
-      ? { ...(effectiveParentMaskGroupModes ?? {}), ...(inheritedMaskGroupModes ?? {}) }
-      : undefined;
-  const nextParentMaskGroups = childParentMaskGroups.length ? childParentMaskGroups : undefined;
-  const nextParentClippingGroups = childParentClippingGroups.length
-    ? childParentClippingGroups
-    : undefined;
+  const childCuts = [...(parentCuts ?? []), ...(regionOptions.cutsForChildren ? (regionOptions.cuts ?? []) : [])];
+  const nextParentJoins = childJoins.length ? childJoins : undefined;
+  const nextParentCuts = childCuts.length ? childCuts : undefined;
 
   const zIndex = resolveZIndex(body, opts.zIndex) + ctx.solution.zOffsets[index];
   const currentNode = createRenderNode(
@@ -228,11 +181,8 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     ctx.solution,
     {
       ...opts,
-      parentMaskedBy: effectiveParentMaskedBy,
-      parentClippedBy: effectiveParentClippedBy,
-      parentMaskGroups: effectiveParentMaskGroups,
-      parentClippingGroups: effectiveParentClippingGroups,
-      parentMaskGroupModes: effectiveParentMaskGroupModes,
+      parentJoins,
+      parentCuts,
     },
     zIndex,
   );
@@ -245,11 +195,8 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     zIndex: zIndex, // parent zIndex as base
     parent: currentNode.articulated ? currentNode : opts.parent,
     opacity: currentNode.opacity, // pass opacity down to joints
-    parentMaskedBy: nextParentMaskedBy,
-    parentClippedBy: nextParentClippedBy,
-    parentMaskGroups: nextParentMaskGroups,
-    parentClippingGroups: nextParentClippingGroups,
-    parentMaskGroupModes: childParentMaskGroupModes,
+    parentJoins: nextParentJoins,
+    parentCuts: nextParentCuts,
   }, ctx);
 
   const attachments = buildTree(body.attachments, {
@@ -258,11 +205,8 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     draggable: true, // attachments can be dragged
     parent: currentNode.articulated ? currentNode : opts.parent,
     opacity: currentNode.opacity, // pass opacity down to attachments
-    parentMaskedBy: nextParentMaskedBy,
-    parentClippedBy: nextParentClippedBy,
-    parentMaskGroups: nextParentMaskGroups,
-    parentClippingGroups: nextParentClippingGroups,
-    parentMaskGroupModes: childParentMaskGroupModes,
+    parentJoins: nextParentJoins,
+    parentCuts: nextParentCuts,
   }, ctx);
 
   const outline =

@@ -1,41 +1,12 @@
 import React, { useContext } from "react";
 import SvgSprite from "./Sprite";
-import SvgSpriteMask from "./SpriteMask";
+import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
-import { getSpriteTransform, matrixTransformToSvg } from "./transform";
+import { matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
-import type { Sprite } from "../types/Sprite";
-import { getFillWrapTargets, wrapFill } from "./fillWrappers";
+import { getFillWrapTargets, RegionFormsContext, wrapFill } from "./fillWrappers";
 import { bindPose, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
-
-/** Render raw SVG geometry for a clip sprite — no <g> wrappers allowed inside clipPath. */
-const renderClipShape = (sprite: Sprite, spriteTransform: string): React.ReactNode => {
-  const shape = sprite.shape ?? "ellipse";
-  if (sprite.customSprite) {
-    const allowed = sprite.clipPathIndices?.length ? new Set(sprite.clipPathIndices) : null;
-    return sprite.customSprite.elements.map((el, i) => {
-      if (allowed && !allowed.has(i)) return null;
-      if (!el.d) return null;
-      // Combine the sprite transform with the element's own transform
-      const combinedTransform = el.transform ? `${spriteTransform} ${el.transform}` : spriteTransform;
-      return <path key={i} d={el.d} transform={combinedTransform} />;
-    });
-  }
-  if (sprite.dynamicPath) {
-    return <path d={sprite.dynamicPath} transform={spriteTransform} />;
-  }
-  if (shape === "rect") return <rect x={-5} y={-5} width={10} height={10} transform={spriteTransform} />;
-  if (shape === "half_circle")
-    return (
-      <path
-        d="M -5 0 A 5 5 0 0 0 5 0 L -5 0 Z"
-        transform={spriteTransform}
-      />
-    );
-  if (shape === "line")
-    return <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1} stroke="black" transform={spriteTransform} />;
-  return <ellipse rx={5} ry={5} transform={spriteTransform} />;
-};
+import { isCut, outlineCuts } from "./regions";
 
 export type SvgGroupProps = {
   g: RenderNode;
@@ -82,6 +53,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   skipFillWrappers,
 }) => {
   const bindings = useContext(PoseBindingsContext);
+  const forms = useContext(RegionFormsContext);
   if (g.noSprite || g.hidden) return null;
 
   const transform = matrixTransformToSvg(g.matrix);
@@ -92,22 +64,21 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   // features can ask whether a part moves with a given joint.
   const rotateChain = rotates ? jointChain(rotateTarget) : undefined;
   const maskId = g.mask ? scopeId(`${g.id}_mask`) : undefined;
-  const clipId = g.clip ? scopeId(`${g.id}_clip`) : undefined;
+  // The node's own cut: a clip-path when its edges are hard, else a mask.
+  const spriteMask = maskId ? spriteMaskAttributes(g.mask!, maskId) : {};
   const patternId = g.pattern ? scopeId(`${g.id}_pattern`) : undefined;
   const patternFillIds: Record<string, string> | undefined = g.patternFills
     ? Object.fromEntries(Object.keys(g.patternFills).map((idx) => [idx, scopeId(`${g.id}_pattern_el${idx}`)]))
     : undefined;
-  const fillWrapTargets = getFillWrapTargets(g, scopeId, skipClipPaths);
-  const fillMaskTargets = fillWrapTargets.maskTargets;
-  const outlineMaskSources = g.outlineMaskedBy ?? g.maskedBy ?? [];
-  const outlineMaskTargets = outlineMaskSources.map((name) => scopeId(`${name}_group_outline`));
-  const outlineClipSources = g.outlineClippedBy ?? g.outlineMaskedBy ?? g.clippedBy ?? [];
-  const outlineClipMaskTargets = g.maskOutline
-    ? outlineClipSources.map((name) => scopeId(`${name}_clip_mask_outline`))
+  const fillWrapTargets = getFillWrapTargets(g, skipClipPaths, forms);
+  // A traced outline is cut by the outlines of the regions it traces.
+  const outlineWrapTargets = g.traceOutline
+    ? outlineCuts(g).flatMap((name) => forms.get(name)?.outlineMaskId ?? [])
     : [];
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
-  const hasFillMasks = fillMaskTargets.length > 0;
+  // Cut nodes keep pointer events off, whether a region cuts them with a mask or a clip-path.
+  const hasFillMasks = isCut(g);
 
   const wrapWithMasks = (content: React.ReactNode, maskIds: string[], variant: "fill" | "outline") => {
     if (!maskIds.length) {
@@ -131,11 +102,6 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   const spriteContent = (
     <>
       {maskId ? <SvgSpriteMask id={maskId} sprite={g.mask!} /> : null}
-      {clipId && g.clip ? (
-        <defs>
-          <clipPath id={clipId}>{renderClipShape(g.clip, getSpriteTransform(g.clip))}</clipPath>
-        </defs>
-      ) : null}
       {patternId && g.pattern ? <SvgSpritePattern id={patternId} sprite={g.pattern} target={g} /> : null}
       {patternFillIds && g.patternFills
         ? Object.entries(g.patternFills).map(([idx, patternSprite]) => (
@@ -170,8 +136,8 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
         transform={transform}
         // Opacity multiplies like the fill's masks and clip-paths, so it can sit here instead of on an outer <g>.
         opacity={outerStyle ? undefined : opacity}
-        mask={maskId ? `url(#${maskId})` : undefined}
-        clipPath={clipId ? `url(#${clipId})` : undefined}
+        mask={spriteMask.mask}
+        clipPath={spriteMask.clipPath}
         data-render-id={g.id}
         ref={joinRefs<SVGGElement>((el) => setPartRef(g.id, el), bindNodeTransform(bindings, g.id))}
         data-rotate-chain={rotateChain}
@@ -215,8 +181,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   );
 
   let outlineGroup: React.ReactNode = null;
-  if (g.maskOutline && (outlineMaskTargets.length > 0 || outlineClipMaskTargets.length > 0)) {
-    const outlineWrapTargets = [...outlineMaskTargets, ...outlineClipMaskTargets];
+  if (outlineWrapTargets.length > 0) {
     // The node's sprite mask is defined once, by the fill.
     const outlineNode = (
       <g

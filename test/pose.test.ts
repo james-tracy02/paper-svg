@@ -111,8 +111,8 @@ describe("solvePose", () => {
       const nodes = flattenRenderTree(buildRenderTreeFromPose(rig, solvePose(rig, pose))).sort((a, b) => a.zIndex - b.zIndex);
       const visibleNodes = resolveVisibleNodes(nodes);
       const plan = planLayers({ nodes, visibleNodes, getRenderGroupOptions: () => undefined, scopeId: (s) => s });
-      const clipGroups = [...plan.defs.clipGroups].map(([name, group]) => [name, group.groups.map((m) => m.node.id)]);
-      return JSON.stringify({ ...plan, defs: { ...plan.defs, clipGroups } }, (_key, value) =>
+      const forms = [...plan.defs.forms];
+      return JSON.stringify({ ...plan, defs: { ...plan.defs, forms } }, (_key, value) =>
         value && typeof value === "object" && "matrix" in value && "zIndex" in value ? (value as RenderNode).id : value,
       );
     };

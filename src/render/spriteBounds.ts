@@ -5,6 +5,7 @@
  * Paths are bounded by their control points, which contain the curves, and transformed boxes by
  * their transformed corners: the results can be a little larger than the drawn shape, never smaller.
  */
+import { membership } from "./regions";
 import svgpath from "svgpath";
 import type { CustomSprite, Sprite } from "../types/Sprite";
 import type { MatrixTransform } from "../types/Transform";
@@ -165,7 +166,7 @@ export const getMaskRegion = (members: readonly RenderNodeLike[], groupName: str
     if (member.noSprite) continue;
     const bounds = getSpriteMaskBounds(member.sprite, member.matrix);
     if (!bounds) return null;
-    region = union(region, expandBounds(bounds, Math.max(0, member.maskOutsets?.[groupName] ?? 0)));
+    region = union(region, expandBounds(bounds, Math.max(0, membership(member, groupName)?.outset ?? 0)));
   }
   return region && expandBounds(region, MASK_PADDING);
 };
@@ -176,4 +177,4 @@ export const getSpriteMaskRegion = (sprite: Sprite): Bounds | null => {
   return bounds && expandBounds(bounds, MASK_PADDING);
 };
 
-type RenderNodeLike = Pick<RenderNode, "noSprite" | "sprite" | "matrix" | "maskOutsets">;
+type RenderNodeLike = Pick<RenderNode, "noSprite" | "sprite" | "matrix" | "regions">;

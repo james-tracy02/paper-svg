@@ -1,10 +1,12 @@
 import type { RenderNode } from "./RenderTree";
 import SvgSprite from "./Sprite";
-import SvgSpriteMask from "./SpriteMask";
+import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import React, { useContext, useMemo } from "react";
 import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
 import { getSpriteSignature } from "./utils/getSpriteSignature";
+import { fillCuts, membership } from "./regions";
+import type { RegionForms, RegionShape } from "./layerPlan";
 import { getMaskRegion, type Bounds } from "./spriteBounds";
 import { bindPose, PoseBindingsContext, setAttr } from "./poseBindings";
 import { bindNodeTransform } from "./Group";
@@ -31,153 +33,126 @@ const maskAttributesFor = (bounds: Bounds | null) =>
 
 type MaskProps = {
   id: string;
-  groupName: string;
-  groups: RenderNode[];
-  /**
-   * "all" — fill + outline + no-outline masks (legacy combined mode).
-   * "fill_only" — just the plain fill + no-outline masks; use alongside a separate
-   * "outline_only" SvgMask instance (same mechanism as clip groups) to produce the
-   * outline mask instead.
-   * "outline_only" — just the outline mask (`${id}_outline`).
-   */
-  mode?: "all" | "outline_only" | "fill_only";
-  /** Ignore member sprite opacity, like a clipPath does (clip group fill masks; e.g. an invisible lower body). */
-  ignoreOpacity?: boolean;
-  /** Fill modes: render the plain `${id}` mask. Off when no node references it. */
-  withFill?: boolean;
-  /** Fill modes: render the `${id}_no_outline` mask. Off when no node references it. */
-  withNoOutline?: boolean;
+  region: string;
+  /** "full": the members' shapes; "inset": the same, minus the inner half of insetting members' outlines; "outline": the members' outlines. */
+  shape: RegionShape;
+  nodes: RenderNode[];
+  /** How every region is drawn, for members that add only where their own cuts leave them. */
+  forms: RegionForms;
 };
 
-const getGroupMaskSignature = (group: RenderNode) => {
-  const maskSprite = group.mask;
+const getMemberMaskSignature = (node: RenderNode) => {
+  const maskSprite = node.mask;
   if (!maskSprite) {
-    return `${group.id}:none`;
+    return `${node.id}:none`;
   }
-  return `${group.id}:${getSpriteSignature(maskSprite)}`;
+  return `${node.id}:${getSpriteSignature(maskSprite)}`;
 };
 
-const SvgMask: React.FC<MaskProps> = ({
-  id,
-  groupName,
-  groups,
-  mode = "all",
-  ignoreOpacity = false,
-  withFill = true,
-  withNoOutline = true,
-}) => {
+const isStroked = (node: RenderNode) => (node.sprite.strokeWidth ?? 0) > 0 && node.sprite.stroke !== "none";
+
+/** A region's shape as a <mask>, for what a clip-path can't draw: subtraction, inset outlines, outline rings. */
+const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
   const bindings = useContext(PoseBindingsContext);
-  const uniqueGroups = useMemo(() => {
+  const members = useMemo(() => {
     const seen = new Set<string>();
-    return groups.filter((group) => {
-      if (seen.has(group.id)) return false;
-      seen.add(group.id);
+    return nodes.filter((node) => {
+      if (seen.has(node.id)) return false;
+      seen.add(node.id);
       return true;
     });
-  }, [groups]);
+  }, [nodes]);
   // From the members' geometry where they stand, so it is right on the first render, without measuring.
-  const bounds = useMemo(() => getMaskRegion(uniqueGroups, groupName), [uniqueGroups, groupName]);
+  const bounds = useMemo(() => getMaskRegion(members, region), [members, region]);
 
-  const spriteMaskSignature = uniqueGroups.map(getGroupMaskSignature).join("||");
+  const spriteMaskSignature = members.map(getMemberMaskSignature).join("||");
 
   const spriteMaskEntries = useMemo(() => {
-    return uniqueGroups
-      .filter((group) => !!group.mask)
-      .map((group) => ({
-        groupId: group.id,
-        maskId: `${id}_${group.id}_sprite_mask`,
-        sprite: group.mask!,
+    return members
+      .filter((node) => !!node.mask)
+      .map((node) => ({
+        nodeId: node.id,
+        maskId: `${id}_${node.id}_sprite_mask`,
+        sprite: node.mask!,
       }));
-  }, [uniqueGroups, id, spriteMaskSignature]);
+  }, [members, id, spriteMaskSignature]);
 
   const spriteMaskLookup = useMemo(() => {
     const map = new Map<string, string>();
     spriteMaskEntries.forEach((entry) => {
-      map.set(entry.groupId, entry.maskId);
+      map.set(entry.nodeId, entry.maskId);
     });
     return map;
   }, [spriteMaskEntries]);
 
-  // Mask ids are `${scope}${groupName}_group` (mask groups) or `_clip_mask` (clip groups).
-  const scopePrefix = id.slice(0, id.lastIndexOf(groupName));
-
-  // Opt-in (clipMaskContribution): the member adds only its clipped shape. Uses the clip group's soft
-  // fill mask (`${name}_clip_mask`), since clip-path is ignored inside <mask> content but mask isn't.
-  const wrapInClipMasks = (group: RenderNode, content: React.ReactElement) =>
-    group.clipMaskContribution
-      ? [...new Set(group.clippedBy ?? [])]
-          .filter((name) => name !== groupName)
-          .reduce(
-            (inner, name) => (
-              <g key={`${group.id}_clip_mask_${name}`} mask={`url(#${scopePrefix}${name}_clip_mask)`}>
+  // A member adding only where it's cut is cut here by the full shape of each region cutting it.
+  const wrapInCuts = (node: RenderNode, content: React.ReactElement) =>
+    membership(node, region)?.onlyWhereCut
+      ? [...new Set(fillCuts(node))]
+          .filter((name) => name !== region)
+          .reduce((inner, name) => {
+            const form = forms.get(name)?.full;
+            const attributes = form?.clipId ? { clipPath: `url(#${form.clipId})` } : form?.maskId ? { mask: `url(#${form.maskId})` } : undefined;
+            return attributes ? (
+              <g key={`${node.id}_cut_${name}`} {...attributes}>
                 {inner}
               </g>
-            ),
-            content,
-          )
+            ) : (
+              inner
+            );
+          }, content)
       : content;
 
-  const renderMaskContents = (mode: "mask" | "outline_mask" | "mask_no_outline") => (
-    <g key={`${id}_${mode}_content`}>
-      {uniqueGroups.map((group) =>
-        group.noSprite || group.hidden ? null : wrapInClipMasks(group, (() => {
-          // maskGroupModes (positive/negative) control whether a node's shape is
-          // included/excluded from the plain fill mask. The outline ring mask must
-          // always use its own black-fill/white-stroke ring coloring regardless of
-          // that — applying the override there would fill the whole interior white
-          // instead of punching a hole, breaking the ring.
-          const maskValue = mode === "outline_mask" ? undefined : group.maskGroupModes?.[groupName];
-          const maskFill = maskValue === "negative" ? "black" : maskValue === "positive" ? "white" : undefined;
-          // Outset: a stroke in the fill color, 2x wide, grows the shape by `outset` on every side.
-          const outset = mode === "outline_mask" ? 0 : (group.maskOutsets?.[groupName] ?? 0);
-          const transform = matrixTransformToSvg(group.matrix);
-          const spriteMaskId = spriteMaskLookup.get(group.id);
-          const sprite = (
-            <SvgSprite
-              key={`${group.id}_${mode}`}
-              id={group.id}
-              sprite={ignoreOpacity ? { ...group.sprite, opacity: undefined } : group.sprite}
-              mode={mode}
-              fillOverride={maskFill}
-              strokeOverride={outset > 0 ? (maskFill ?? "white") : maskValue === "negative" ? maskFill : undefined}
-              strokeWidthOverride={outset > 0 ? outset * 2 : undefined}
-              // A sprite mask is in node space, so only then does the node transform need its own <g>.
-              baseTransform={spriteMaskId ? undefined : transform}
-              poseNode={group.id}
-            />
-          );
-          return spriteMaskId ? (
-            <g
-              key={`${group.id}_${mode}`}
-              ref={bindNodeTransform(bindings, group.id)}
-              transform={transform}
-              mask={`url(#${spriteMaskId})`}
-            >
-              {sprite}
-            </g>
-          ) : (
-            sprite
-          );
-        })()),
-      )}
-    </g>
-  );
-
-  const renderOutlineMaskContents = () => (
-    renderMaskContents("outline_mask")
-  );
+  const renderMember = (node: RenderNode) => {
+    const member = membership(node, region);
+    // The outline ring keeps its own black-fill/white-stroke colouring: an add or subtract fill would break it.
+    const mode =
+      shape === "outline" ? "outline_mask" : shape === "inset" && member?.inset && isStroked(node) ? "mask_no_outline" : "mask";
+    const maskFill = shape === "outline" ? undefined : member?.subtract ? "black" : "white";
+    // Outset: a stroke in the fill color, 2x wide, grows the shape by `outset` on every side.
+    const outset = shape === "outline" ? 0 : (member?.outset ?? 0);
+    const transform = matrixTransformToSvg(node.matrix);
+    const spriteMaskId = spriteMaskLookup.get(node.id);
+    // Only the shape counts: opacity and blur don't (see regions.ts).
+    const sprite = (
+      <SvgSprite
+        key={`${node.id}_${mode}`}
+        id={node.id}
+        sprite={{ ...node.sprite, opacity: undefined, blur: undefined }}
+        mode={mode}
+        fillOverride={maskFill}
+        strokeOverride={outset > 0 ? maskFill : member?.subtract ? maskFill : undefined}
+        strokeWidthOverride={outset > 0 ? outset * 2 : undefined}
+        // A sprite mask is in node space, so only then does the node transform need its own <g>.
+        baseTransform={spriteMaskId ? undefined : transform}
+        poseNode={node.id}
+      />
+    );
+    return spriteMaskId ? (
+      <g
+        key={`${node.id}_${mode}`}
+        ref={bindNodeTransform(bindings, node.id)}
+        transform={transform}
+        {...spriteMaskAttributes(node.mask!, spriteMaskId)}
+      >
+        {sprite}
+      </g>
+    ) : (
+      sprite
+    );
+  };
 
   const maskAttributes = maskAttributesFor(bounds);
   // The region follows the members, so a pose that moves one rewrites it.
-  const memberIds = uniqueGroups.map((group) => group.id);
+  const memberIds = members.map((node) => node.id);
   const bindRegion = () =>
     bindPose<Element>(bindings, memberIds, (element) => (get) => {
-      const region = maskAttributesFor(getMaskRegion(uniqueGroups.map((group) => get(group.id) ?? group), groupName));
-      setAttr(element, "x", region.x);
-      setAttr(element, "y", region.y);
-      setAttr(element, "width", region.width);
-      setAttr(element, "height", region.height);
-      setAttr(element, "maskUnits", region.maskUnits);
+      const next = maskAttributesFor(getMaskRegion(members.map((node) => get(node.id) ?? node), region));
+      setAttr(element, "x", next.x);
+      setAttr(element, "y", next.y);
+      setAttr(element, "width", next.width);
+      setAttr(element, "height", next.height);
+      setAttr(element, "maskUnits", next.maskUnits);
     });
 
   return (
@@ -185,42 +160,22 @@ const SvgMask: React.FC<MaskProps> = ({
       {spriteMaskEntries.map((entry) => (
         <SvgSpriteMask key={entry.maskId} id={entry.maskId} sprite={entry.sprite} />
       ))}
-      {mode === "all" || mode === "fill_only" ? (
-        <>
-          {withFill ? (
-            <mask key={id} ref={bindRegion()} id={id} {...maskAttributes}>
-              {renderMaskContents("mask")}
-            </mask>
-          ) : null}
-          {mode === "all" ? (
-            <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
-              {renderOutlineMaskContents()}
-            </mask>
-          ) : null}
-          {withNoOutline ? (
-            <mask key={id + "_no_outline"} ref={bindRegion()} id={id + "_no_outline"} {...maskAttributes}>
-              {renderMaskContents("mask_no_outline")}
-            </mask>
-          ) : null}
-        </>
-      ) : (
-        <mask key={id + "_outline"} ref={bindRegion()} id={id + "_outline"} {...maskAttributes}>
-          {renderOutlineMaskContents()}
-        </mask>
-      )}
+      <mask ref={bindRegion()} id={id} {...maskAttributes}>
+        <g>
+          {members.map((node) => (node.noSprite || node.hidden ? null : wrapInCuts(node, renderMember(node))))}
+        </g>
+      </mask>
     </>
   );
 };
 
-// Groups arrays are rebuilt every render; members keep identity while a pose leaves them in place (see posedRig.ts).
+// Node arrays are rebuilt every render; members keep identity while a pose leaves them in place (see posedRig.ts).
 const areEqual = (a: MaskProps, b: MaskProps) =>
   a.id === b.id &&
-  a.groupName === b.groupName &&
-  a.mode === b.mode &&
-  a.ignoreOpacity === b.ignoreOpacity &&
-  a.withFill === b.withFill &&
-  a.withNoOutline === b.withNoOutline &&
-  a.groups.length === b.groups.length &&
-  a.groups.every((group, index) => group === b.groups[index]);
+  a.region === b.region &&
+  a.shape === b.shape &&
+  a.forms === b.forms &&
+  a.nodes.length === b.nodes.length &&
+  a.nodes.every((node, index) => node === b.nodes[index]);
 
 export default React.memo(SvgMask, areEqual);

@@ -1,6 +1,6 @@
 import type { Vector2 } from "./primitives";
 import type { CSSProperties } from "react";
-import type { Node, NodeFollow, NodePaint } from "./Node";
+import type { Node, NodeFollow, NodePaint, RegionJoin } from "./Node";
 import type { Sprite } from "./Sprite";
 import type { TransformState } from "./TransformState";
 import type { Transform } from "./Transform";
@@ -32,34 +32,33 @@ interface BuilderState {
   sprite: Sprite;
   noSprite?: boolean;
   mask?: Sprite;
-  clip?: Sprite;
-  maskGroups: string[];
-  maskGroupModes: Record<string, "positive" | "negative">;
-  parentMaskedBy: string[];
-  maskedBy: string[];
-  outlineMaskedBy: string[];
-  clippingGroups: string[];
-  clipOutsets: Record<string, number>;
-  maskOutsets: Record<string, number>;
-  clippedBy: string[];
-  outlineClippedBy: string[];
-  inheritMaskingForChildren?: boolean;
-  stopInheritedMasking?: boolean;
-  inheritGroupsForChildren?: boolean;
-  stopInheritedGroups?: boolean;
+  joins: RegionJoin[];
+  regionOutsets: Record<string, number>;
+  cuts: string[];
+  onlyWhereCut?: boolean;
+  regionsForChildren?: boolean;
+  cutsForChildren?: boolean;
+  stopInheritedRegions?: boolean;
+  stopInheritedCuts?: boolean;
   outlineZIndex?: number;
   pointerEvents?: boolean;
   pointerEventsTarget?: string;
   blendMode?: CSSProperties["mixBlendMode"];
   zIndexMode: "relative" | "absolute";
-  maskOutline: boolean;
-  disableOutlineHoisting?: boolean;
-  clipMaskContribution?: boolean;
+  traceOutline?: boolean;
+  traceRegions: string[];
+  insetOutlines?: boolean;
   opacity?: number;
   renderGroup?: RenderGroup;
   debugColor?: string;
   drivers?: Omit<NodeDriver, "mirror">[];
 }
+
+/** One region name or several; empty names (undefined, null, "") are skipped, so optional regions can be passed as is. */
+export type RegionNames = string | null | undefined | readonly (string | null | undefined)[];
+
+const regionNames = (names: RegionNames): string[] =>
+  (Array.isArray(names) ? names : [names]).filter((name): name is string => typeof name === "string" && name.length > 0);
 
 /** `group` without its undefined fields, or undefined when none is left. */
 const definedOnly = <T extends object>(group: T): T | undefined => {
@@ -87,18 +86,11 @@ export default class NodeBuilder {
           scale: { x: 1, y: 1 },
           rotate: 0,
         },
-        maskGroups: [],
-        maskGroupModes: {},
-        parentMaskedBy: [],
-        maskedBy: [],
-        outlineMaskedBy: [],
-        clippingGroups: [],
-        clipOutsets: {},
-        maskOutsets: {},
-        clippedBy: [],
-        outlineClippedBy: [],
+        joins: [],
+        regionOutsets: {},
+        cuts: [],
+        traceRegions: [],
         zIndexMode: "relative",
-        maskOutline: false,
       } satisfies BuilderState);
   }
 
@@ -259,170 +251,91 @@ export default class NodeBuilder {
     return this.with({ noSprite: b });
   }
 
-  setMask(mask: Sprite | undefined): NodeBuilder {
-    if (mask === undefined) {
-      return this;
-    }
-
-    return this.with({ mask });
-  }
-
-  setClip(clip: Sprite): NodeBuilder {
-    return this.with({ clip });
-  }
-
-  setClipIf(condition: boolean, clip: Sprite): NodeBuilder {
-    if (condition) {
-      return this.setClip(clip);
-    }
-    return this;
-  }
-
-  addMaskGroups(...names: string[]): NodeBuilder {
-    if (!names.length) {
-      return this;
-    }
-    const nextModes = { ...this._state.maskGroupModes };
-    const nextGroups = [...this._state.maskGroups];
-    names.forEach((name) => {
-      if (!nextGroups.includes(name)) {
-        nextGroups.push(name);
-      }
-      if (nextModes[name] === undefined) {
-        nextModes[name] = "positive";
-      }
-    });
-    return this.with({
-      maskGroups: nextGroups,
-      maskGroupModes: nextModes,
-    });
-  }
-
-  addMaskGroup(name: string | undefined, mode: "positive" | "negative" = "positive", outset?: number): NodeBuilder {
-    if (!name) return this;
-    const nextGroups = this._state.maskGroups.includes(name)
-      ? this._state.maskGroups
-      : [...this._state.maskGroups, name];
-    const next = this.with({
-      maskGroups: nextGroups,
-      maskGroupModes: { ...this._state.maskGroupModes, [name]: mode },
-    });
-    return outset === undefined ? next : next.setMaskOutset(name, outset);
-  }
-
-  /** Grows this node's shape in the named mask group by `outset` (world units, like outlineWidth). */
-  setMaskOutset(name: string, outset: number): NodeBuilder {
-    return this.with({
-      maskOutsets: { ...this._state.maskOutsets, [name]: outset },
-    });
-  }
-
-  addNegativeMaskGroup(name?: string): NodeBuilder {
-    return this.addMaskGroup(name, "negative");
-  }
-
-  addMaskedBy(...names: Array<string | undefined | null>): NodeBuilder {
-    const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
-    if (!filtered.length) {
-      return this;
-    }
-    return this.with({ maskedBy: [...this._state.maskedBy, ...filtered] });
-  }
-
-  /** Masks this node's mask outline by these mask groups instead of its `addMaskedBy` ones. */
-  addOutlineMaskedBy(...names: Array<string | undefined | null>): NodeBuilder {
-    const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
-    if (!filtered.length) {
-      return this;
-    }
-    return this.with({ outlineMaskedBy: [...this._state.outlineMaskedBy, ...filtered] });
-  }
-
-  addClippingGroups(...names: Array<string | undefined | null>): NodeBuilder {
-    const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
-    if (!filtered.length) {
-      return this;
-    }
-    return this.with({
-      clippingGroups: [...this._state.clippingGroups, ...filtered],
-    });
-  }
-
-  addClippingGroup(name: string | undefined | null, outset?: number): NodeBuilder {
-    return this.addClippingGroups(name).setClipOutset(name ?? "", outset ?? 0);
-  }
-
-  setClipOutset(name: string, outset: number): NodeBuilder {
-    return this.with({
-      clipOutsets: { ...this._state.clipOutsets, [name]: outset },
-    });
-  }
-
-  setParentMaskedBy(...names: string[]): NodeBuilder {
-    const filtered = names.filter((name) => name.length > 0);
-    if (!filtered.length) return this;
-    return this.with({ parentMaskedBy: [...this._state.parentMaskedBy, ...filtered] });
-  }
-
-  addParentMaskedBy(...names: string[]): NodeBuilder {
-    return this.setParentMaskedBy(...names);
-  }
-
-  addClippedBy(...names: Array<string | undefined | null>): NodeBuilder {
-    const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
-    if (!filtered.length) {
-      return this;
-    }
-    return this.with({ clippedBy: [...this._state.clippedBy, ...filtered] });
-  }
-
-  /** Clips this node's mask outline by these clip groups instead of its `addClippedBy` ones. */
-  addOutlineClippedBy(...names: Array<string | undefined | null>): NodeBuilder {
-    const filtered = names.filter((value): value is string => typeof value === "string" && value.length > 0);
-    if (!filtered.length) {
-      return this;
-    }
-    return this.with({ outlineClippedBy: [...this._state.outlineClippedBy, ...filtered] });
+  /**
+   * Cuts this node by `cut`, a shape in the node's own space: only what lies inside it draws. Hard edges draw as a
+   * clip-path, soft ones (partial opacity, blur, an image) as a mask. Does nothing for undefined.
+   */
+  setCut(cut: Sprite | undefined): NodeBuilder {
+    return cut === undefined ? this : this.with({ mask: cut });
   }
 
   /**
-   * When enabled, this node's own maskedBy (mask groups) and clippedBy (clip groups)
-   * values are automatically inherited by every descendant joint and attachment, in
-   * addition to whatever they already have — no need to repeat them on every child.
+   * Adds this node's shape to the named regions, or with `subtract` removes it. `outset` grows the shape in the
+   * region by that much on every side (world units). `inset` keeps the nodes the region cuts inside this node's
+   * outline by cutting the outline out of the region, instead of lifting it above them (hoisting, the default).
+   * Joining a region again replaces its options.
    */
-  inheritMaskingForChildren(enabled: boolean = true): NodeBuilder {
-    return this.with({ inheritMaskingForChildren: enabled });
+  addToRegion(names: RegionNames, options: { subtract?: boolean; outset?: number; inset?: boolean } = {}): NodeBuilder {
+    const added = regionNames(names);
+    if (!added.length) return this;
+    const join = (region: string): RegionJoin => ({
+      region,
+      ...(options.subtract ? { subtract: true } : {}),
+      ...(options.outset ? { outset: options.outset } : {}),
+      ...(options.inset ? { inset: true } : {}),
+    });
+    return this.with({
+      joins: [...this._state.joins.filter((existing) => !added.includes(existing.region)), ...added.map(join)],
+    });
+  }
+
+  /** Grows this node's shape in the named region by `outset` (world units), whenever it joins it. */
+  setRegionOutset(name: string, outset: number): NodeBuilder {
+    return this.with({ regionOutsets: { ...this._state.regionOutsets, [name]: outset } });
   }
 
   /**
-   * When enabled, this node ignores any maskedBy/clippedBy values being passed down from
-   * an ancestor's inheritMaskingForChildren — breaking the chain here so this node (and,
-   * since inheritance stops at the source, its descendants) stop receiving them. Does not
-   * affect this node's own explicit addMaskedBy/addClippedBy values.
+   * Cuts this node by the named regions: it draws only inside each, and inside its members' outlines (each member
+   * either hoists its outline over this node or insets it). Repeats are kept, as each cut applies again.
    */
-  stopInheritedMasking(enabled: boolean = true): NodeBuilder {
-    return this.with({ stopInheritedMasking: enabled });
+  cutBy(names: RegionNames): NodeBuilder {
+    const added = regionNames(names);
+    return added.length ? this.with({ cuts: [...this._state.cuts, ...added] }) : this;
   }
 
   /**
-   * When enabled, this node's own maskGroups/clippingGroups (the mask and clip
-   * groups it defines/belongs to, along with their maskGroupModes) are automatically
-   * inherited by every descendant joint and attachment, in addition to whatever groups
-   * they already declare. Every descendant then also contributes its geometry to those
-   * same mask/clip groups — no need to repeat addMaskGroup/addClippingGroups on each child.
+   * Draws this node over the outlines of the regions cutting it, in its own outline colour, where it covers them:
+   * a garment along the body's silhouette redraws that stretch of the silhouette in its colour. The node's fill is
+   * then cut by those regions' full shapes, outlines included. See `traceOutlineOf` to trace other regions.
    */
-  inheritGroupsForChildren(enabled: boolean = true): NodeBuilder {
-    return this.with({ inheritGroupsForChildren: enabled });
+  traceOutline(enabled: boolean = true): NodeBuilder {
+    return this.with({ traceOutline: enabled || undefined });
   }
 
-  /**
-   * When enabled, this node ignores any maskGroups/clippingGroups/maskGroupModes
-   * being passed down from an ancestor's inheritGroupsForChildren — breaking the chain
-   * here so this node (and its descendants) stop receiving them. Does not affect this
-   * node's own explicit addMaskGroup/addClippingGroups declarations.
-   */
-  stopInheritedGroups(enabled: boolean = true): NodeBuilder {
-    return this.with({ stopInheritedGroups: enabled });
+  /** Like `traceOutline`, but traces the named regions' outlines instead of the regions cutting this node. */
+  traceOutlineOf(names: RegionNames): NodeBuilder {
+    const added = regionNames(names);
+    return added.length ? this.with({ traceOutline: true, traceRegions: [...this._state.traceRegions, ...added] }) : this;
+  }
+
+  /** Insets this node's outline in every region it joins (see `addToRegion`), instead of hoisting it. */
+  insetOutlines(enabled: boolean = true): NodeBuilder {
+    return this.with({ insetOutlines: enabled || undefined });
+  }
+
+  /** Adds this node to its regions only where its own cuts leave it, not its whole shape. */
+  onlyWhereCut(enabled: boolean = true): NodeBuilder {
+    return this.with({ onlyWhereCut: enabled || undefined });
+  }
+
+  /** Every descendant joins this node's regions too, in addition to its own (outsets stay with this node). */
+  regionsForChildren(enabled: boolean = true): NodeBuilder {
+    return this.with({ regionsForChildren: enabled || undefined });
+  }
+
+  /** Every descendant is cut by this node's regions too, in addition to its own cuts. */
+  cutsForChildren(enabled: boolean = true): NodeBuilder {
+    return this.with({ cutsForChildren: enabled || undefined });
+  }
+
+  /** Ignores the regions ancestors pass down (`regionsForChildren`), for this node and its descendants. */
+  stopInheritedRegions(enabled: boolean = true): NodeBuilder {
+    return this.with({ stopInheritedRegions: enabled || undefined });
+  }
+
+  /** Ignores the cuts ancestors pass down (`cutsForChildren`), for this node and its descendants. */
+  stopInheritedCuts(enabled: boolean = true): NodeBuilder {
+    return this.with({ stopInheritedCuts: enabled || undefined });
   }
 
   setOutlineZIndex(zIndex: number): NodeBuilder {
@@ -466,22 +379,6 @@ export default class NodeBuilder {
     return this.with({ debugColor: color });
   }
 
-  setMaskOutline(maskOutline: boolean): NodeBuilder {
-    return this.with({ maskOutline });
-  }
-
-  disableOutlineHoisting(): NodeBuilder {
-    return this.with({ disableOutlineHoisting: true });
-  }
-
-  /**
-   * This node adds only its clipped (addClippedBy) shape to its mask groups, not its full sprite.
-   * Done with a soft mask of each clip group, since browsers ignore clip-path inside <mask> content.
-   */
-  clipMaskContribution(): NodeBuilder {
-    return this.with({ clipMaskContribution: true });
-  }
-
   /**
    * Applies `transform` on top of this node's own: moved by its position, turned by its rotation,
    * skewed by its skew and scaled by its scale. Does nothing for undefined.
@@ -516,20 +413,6 @@ export default class NodeBuilder {
         }
       : undefined;
 
-    const clip = s.clip
-      ? {
-          ...s.clip,
-          translate: {
-            x: s.clip.translate.x * mult,
-            y: s.clip.translate.y,
-          },
-          scale: {
-            x: s.clip.scale.x * mult,
-            y: s.clip.scale.y,
-          },
-        }
-      : undefined;
-
     const aimAt = s.aimAt && {
       ...s.aimAt,
       point: { x: s.aimAt.point.x * mult, y: s.aimAt.point.y },
@@ -558,7 +441,6 @@ export default class NodeBuilder {
       paint: definedOnly({
         noSprite: s.noSprite,
         mask,
-        clip,
         opacity: s.opacity,
         blendMode: s.blendMode,
         patternSpace: s.patternSpace,
@@ -567,29 +449,25 @@ export default class NodeBuilder {
       }),
       outline: definedOnly({
         zIndex: s.outlineZIndex,
-        masked: s.maskOutline,
-        disableHoisting: s.disableOutlineHoisting,
+        trace: s.traceOutline ? (s.traceRegions.length ? s.traceRegions : true) : undefined,
+        inset: s.insetOutlines,
       }),
       interaction: definedOnly({
         articulated: s.articulated,
         pointerEvents: s.pointerEvents,
         target: s.pointerEventsTarget,
       }),
-      maskedBy: s.maskedBy,
-      outlineMaskedBy: s.outlineMaskedBy.length ? s.outlineMaskedBy : undefined,
-      maskGroups: s.maskGroups,
-      maskGroupModes: s.maskGroupModes,
-      parentMaskedBy: s.parentMaskedBy,
-      clippedBy: s.clippedBy,
-      outlineClippedBy: s.outlineClippedBy.length ? s.outlineClippedBy : undefined,
-      clippingGroups: s.clippingGroups,
-      clipOutsets: Object.keys(s.clipOutsets).length > 0 ? s.clipOutsets : undefined,
-      maskOutsets: Object.keys(s.maskOutsets).length > 0 ? s.maskOutsets : undefined,
-      inheritMaskingForChildren: s.inheritMaskingForChildren,
-      stopInheritedMasking: s.stopInheritedMasking,
-      inheritGroupsForChildren: s.inheritGroupsForChildren,
-      stopInheritedGroups: s.stopInheritedGroups,
-      clipMaskContribution: s.clipMaskContribution,
+      regions: definedOnly({
+        joins: s.joins.length
+          ? s.joins.map((join) => (s.regionOutsets[join.region] ? { ...join, outset: s.regionOutsets[join.region] } : join))
+          : undefined,
+        cuts: s.cuts.length ? s.cuts : undefined,
+        onlyWhereCut: s.onlyWhereCut,
+        regionsForChildren: s.regionsForChildren,
+        cutsForChildren: s.cutsForChildren,
+        stopInheritedRegions: s.stopInheritedRegions,
+        stopInheritedCuts: s.stopInheritedCuts,
+      }),
       debugColor: s.debugColor,
     };
   }

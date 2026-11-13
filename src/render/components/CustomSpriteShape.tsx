@@ -75,8 +75,10 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
     if (noFill) return "none";
     // When fillOverride is set, force ALL element fills to that value (e.g. "none" for stroke-only pass).
     if (fillOverride !== undefined) return fillOverride;
+    // A mask draws shapes only: every filled element in the mask's fill, whatever its colours.
+    if (mask) return baseFill;
     if (colorKey && sprite.inheritStrokeColors?.[colorKey]) return baseStroke;
-    if (mode === "outline" || mask) return baseFill;
+    if (mode === "outline") return baseFill;
     if (pattern) return baseFill;
     const perIndexPatternId = patternFills?.[String(index)];
     if (perIndexPatternId !== undefined) return `url(#${perIndexPatternId})`;
@@ -88,6 +90,8 @@ const CustomSpriteShape: React.FC<CustomSpriteShapeProps> = ({
     const mappedStroke = strokeColorKey ? sprite.strokeColors?.[strokeColorKey] : undefined;
     if (mappedStroke === "none") return "none";
     if (strokeOverride) return strokeOverride;
+    // Likewise every stroke in the mask's stroke colour, so detail lines cut the same as the outline.
+    if (mask) return baseStroke;
     if (mappedStroke) return mappedStroke;
     return baseStroke;
   };

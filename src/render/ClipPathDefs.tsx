@@ -2,7 +2,8 @@ import React, { useContext } from "react";
 import { getSpriteTransform, matrixTransformToSvg } from "./transform";
 import type { Sprite } from "../types/Sprite";
 import { outsetPathData } from "./outsetPath";
-import type { ClipGroup } from "./layerPlan";
+import type { RegionDef } from "./layerPlan";
+import { membership } from "./regions";
 import type { RenderNode } from "./RenderTree";
 import { bindPose, PoseBindingsContext, prefixWriter, setAttr, type PoseBindings } from "./poseBindings";
 
@@ -57,12 +58,13 @@ const renderClipElement = (
       const resolvedFill = el.colorKey ? (sprite.colors?.[el.colorKey] ?? sprite.fill) : sprite.fill;
       if (!resolvedFill || resolvedFill === "none") return null;
       const t = [combinedTransform, customRootTransform, el.transform].filter(Boolean).join(" ");
-      const d = outset != null ? outsetPathData(el.d, outset) : el.d;
+      const d = outset ? outsetPathData(el.d, outset) : el.d;
       return <path key={`${key}_${i}`} ref={bind(t)} d={d} transform={t} />;
     });
   }
   if (sprite.dynamicPath) {
-    const outsetPath = (path: string) => (outset != null ? outsetPathData(path, outset) : path);
+    // An outset of 0 leaves the path as is, without offsetting it.
+    const outsetPath = (path: string) => (outset ? outsetPathData(path, outset) : path);
     const drivenPath = (node: RenderNode) => node.sprite.dynamicPath && outsetPath(node.sprite.dynamicPath);
     return (
       <path
@@ -90,37 +92,35 @@ const renderClipElement = (
 };
 
 type ClipPathDefsProps = {
-  clipGroups: Map<string, ClipGroup>;
-  scopeId: (suffix: string) => string;
+  /** The regions to draw as clip-paths, with their members as they stand. */
+  defs: RegionDef[];
 };
 
-const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ clipGroups, scopeId }) => {
+/** Region shapes as <clipPath>s: each member's shape, whatever its fill or colours (see regions.ts). */
+const ClipPathDefs: React.FC<ClipPathDefsProps> = ({ defs }) => {
   const bindings = useContext(PoseBindingsContext);
-  if (clipGroups.size === 0) return null;
+  if (defs.length === 0) return null;
 
   return (
     <defs>
-      {Array.from(clipGroups.values()).map((clipGroup) => {
-        const clipId = scopeId(`${clipGroup.id}_clippath`);
-        return (
-          <clipPath key={clipId} id={clipId} clipPathUnits="userSpaceOnUse">
-            {clipGroup.groups.map((member) => {
-              const group = member.node;
-              if (group.noSprite || group.hidden) return null;
-              const nodeTransform = clipNodeTransform(group);
-              const spriteTransform = getSpriteTransform(group.sprite, CLIP_PRECISION);
-              return renderClipElement(
-                group.sprite,
-                nodeTransform,
-                spriteTransform,
-                group.id,
-                member.outset,
-                clipBinder(bindings, group),
-              );
-            })}
-          </clipPath>
-        );
-      })}
+      {defs.map((def) => (
+        <clipPath key={def.key} id={def.id} clipPathUnits="userSpaceOnUse">
+          {def.nodes.map((node) => {
+            if (node.noSprite || node.hidden) return null;
+            const nodeTransform = clipNodeTransform(node);
+            const spriteTransform = getSpriteTransform(node.sprite, CLIP_PRECISION);
+            const sprite = { ...node.sprite, fill: "white", colors: {} };
+            return renderClipElement(
+              sprite,
+              nodeTransform,
+              spriteTransform,
+              node.id,
+              membership(node, def.region)?.outset,
+              clipBinder(bindings, node),
+            );
+          })}
+        </clipPath>
+      ))}
     </defs>
   );
 };

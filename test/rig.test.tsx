@@ -38,23 +38,63 @@ describe("Rig", () => {
     expect(svg.indexOf(drawn("bottom"))).toBeLessThan(svg.indexOf(drawn("top")));
   });
 
-  it("generates masks and clips under idPrefix and applies them", () => {
+  it("generates region masks and clips under idPrefix and applies them", () => {
     const body = part("root")
-      .addMaskGroup("soft")
-      .addClippingGroup("hard")
-      .addJoints(part("masked").addMaskedBy("soft").build(), part("clipped").addClippedBy("hard").build())
+      // An outset keeps it a <mask> rather than a clip-path.
+      .addToRegion("soft", { inset: true })
+      .setRegionOutset("soft", 1)
+      .addToRegion("hard")
+      .addJoints(part("masked").cutBy("soft").build(), part("clipped").cutBy("hard").build())
       .build();
     const svg = render({ body, idPrefix: "demo" });
 
-    expect(svg).toContain('id="demo_soft_group');
-    expect(svg).toContain('mask="url(#demo_soft_group');
-    expect(svg).toContain('id="demo_hard_clippath"');
-    expect(svg).toContain("url(#demo_hard_clippath)");
+    expect(svg).toContain('<mask id="demo_soft_region"');
+    expect(svg).toContain('mask="url(#demo_soft_region)"');
+    expect(svg).toContain('<clipPath id="demo_hard_region"');
+    expect(svg).toContain('clip-path="url(#demo_hard_region)"');
+  });
+
+  it("draws a hard sprite mask as a <clipPath> and a soft one as a <mask>", () => {
+    const hard = new SpriteBuilder().setShape("rect").setMaskScale(0.5).build();
+    const soft = new SpriteBuilder().setShape("rect").setOpacity(0.5).build();
+    const body = part("root").addJoints(part("cut").setCut(hard).build(), part("faded").setCut(soft).build()).build();
+    const svg = render({ body, idPrefix: "demo" });
+
+    expect(svg).toMatch(/<clipPath id="demo_cut_mask"[^>]*><rect [^>]*transform="[^"]*0\.5/);
+    expect(svg).toContain('clip-path="url(#demo_cut_mask)"');
+    expect(svg).toContain('<mask id="demo_faded_mask"');
+    expect(svg).toContain('mask="url(#demo_faded_mask)"');
+  });
+
+  it("cuts a member adding only where it's cut by its cutting region's <clipPath>, inside the other region's mask", () => {
+    const body = part("root")
+      .addToRegion("hard")
+      .addJoints(
+        part("member").addToRegion("soft", { inset: true }).cutBy("hard").onlyWhereCut().build(),
+        part("masked").cutBy("soft").build(),
+      )
+      .build();
+    const svg = render({ body, idPrefix: "demo" });
+
+    expect(svg).toMatch(/<mask id="demo_soft_region"[^]*?clip-path="url\(#demo_hard_region\)"[^]*?<\/mask>/);
+    expect(svg).not.toContain('<mask id="demo_hard');
+  });
+
+  it("draws a clip member's path as is when its outset is 0, the addClippingGroup default", () => {
+    const d = "M 0 0 L 10 0 L 10 10 Z";
+    const body = part("root")
+      .setSprite(new SpriteBuilder().setPath(d).build())
+      .addToRegion("hard")
+      .addJoints(part("clipped").cutBy("hard").build())
+      .build();
+    const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_region"[^>]*>(.*?)<\/clipPath>/)?.[1];
+
+    expect(clipPath).toContain(`d="${d}"`);
   });
 
   it("does not draw a node restricted to a group nobody defines", () => {
     const body = part("root")
-      .addJoints(part("masked").addMaskedBy("missing").build(), part("clipped").addClippedBy("missing").build())
+      .addJoints(part("masked").cutBy("missing").build(), part("clipped").cutBy("missing").build())
       .build();
     const svg = render({ body });
 
@@ -104,17 +144,17 @@ describe("outlines", () => {
     expect(svg).not.toContain("part_outline_pattern");
   });
 
-  it("hoists a clip group owner's outline above its dependents, shrinking its sprite mask", () => {
+  it("hoists a clip group owner's outline above its dependents, cut by the owner's own sprite mask", () => {
     const body = new NodeBuilder("owner")
       .setSprite(stroked("#00ff00").build())
-      .setMask(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
-      .addClippingGroup("hard")
-      .addJoints(part("dependent").setZIndex(3).addClippedBy("hard").build())
+      .setCut(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
+      .addToRegion("hard")
+      .addJoints(part("dependent").setZIndex(3).cutBy("hard").build())
       .build();
     const svg = render({ body });
 
     expect(svg.indexOf(drawn("owner_outline"))).toBeGreaterThan(svg.indexOf(drawn("dependent")));
     const outlineMask = svg.slice(svg.indexOf('id="rig_owner_outline_mask"'));
-    expect(outlineMask.slice(0, outlineMask.indexOf("</mask>"))).toContain("1.998");
+    expect(outlineMask.slice(0, outlineMask.indexOf("</clipPath>"))).toContain("matrix(2, 0, 0, 2, 0, 0)");
   });
 });

@@ -11,7 +11,6 @@ function* customElements(sprite: Sprite | undefined): Generator<CustomElement> {
 function* traverseElements(part: Node): Generator<CustomElement> {
   yield* customElements(part.sprite);
   if (part.paint?.mask) yield* customElements(part.paint.mask);
-  if (part.paint?.clip) yield* customElements(part.paint.clip);
   if (part.sprite.pattern) yield* customElements(part.sprite.pattern);
   if (part.joints) for (const j of part.joints) yield* traverseElements(j);
   if (part.attachments) for (const a of part.attachments) yield* traverseElements(a);
@@ -48,7 +47,7 @@ const SpriteDefs: React.FC<SpriteDefsProps> = ({ body, nodes }) => {
     if (!nodes) return "";
     const extra = new Set<string>();
     for (const node of nodes) {
-      for (const sprite of [node.sprite, node.mask, node.clip, node.pattern]) {
+      for (const sprite of [node.sprite, node.mask, node.pattern]) {
         for (const el of customElements(sprite)) if (el.d && !bodyPaths.has(el.d)) extra.add(el.d);
       }
     }

@@ -8,9 +8,10 @@ import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
-import { wrapWith } from "./fillWrappers";
+import { RegionFormsContext, wrapWith } from "./fillWrappers";
+import { isCut } from "./regions";
 import { HoistedDefsProvider } from "./HoistedDefs";
-import { planLayers, resolveVisibleNodes, type ClipGroup, type MaskDef, type PaintItem } from "./layerPlan";
+import { planLayers, resolveVisibleNodes, type PaintItem, type RegionDef, type RegionForms } from "./layerPlan";
 import { getPosedRig } from "./useRenderNodes";
 import { PoseBindingsContext } from "./poseBindings";
 import type { LivePoser } from "./livePose";
@@ -65,20 +66,11 @@ const withPointerEvents = (g: RenderNode, pointerEvents: boolean): RenderNode =>
 
 const sameNode = (node: RenderNode) => node;
 
-const renderMaskDefs = (defs: MaskDef[], current: (node: RenderNode) => RenderNode) =>
+const renderMaskDefs = (defs: RegionDef[], forms: RegionForms, current: (node: RenderNode) => RenderNode) =>
   defs.length ? (
     <defs>
       {defs.map((def) => (
-        <SvgMask
-          key={def.key}
-          id={def.id}
-          groupName={def.groupName}
-          groups={def.nodes.map(current)}
-          mode={def.mode}
-          withFill={def.withFill}
-          withNoOutline={def.withNoOutline}
-          ignoreOpacity={def.ignoreOpacity}
-        />
+        <SvgMask key={def.key} id={def.id} region={def.region} shape={def.shape} nodes={def.nodes.map(current)} forms={forms} />
       ))}
     </defs>
   ) : null;
@@ -115,16 +107,8 @@ const RigLayers: React.FC<RigLayersProps> = ({
     () => planLayers({ nodes: planNodes, visibleNodes, getRenderGroupOptions, scopeId }),
     [planNodes, visibleNodes, getRenderGroupOptions, scopeId],
   );
-  const clipGroups = useMemo(
-    () =>
-      posed
-        ? new Map<string, ClipGroup>(
-            [...plan.defs.clipGroups].map(([name, group]) => [
-              name,
-              { ...group, groups: group.groups.map((member) => ({ ...member, node: current(member.node) })) },
-            ]),
-          )
-        : plan.defs.clipGroups,
+  const clipDefs = useMemo(
+    () => (posed ? plan.defs.clips.map((def) => ({ ...def, nodes: def.nodes.map(current) })) : plan.defs.clips),
     [plan, posed, current],
   );
 
@@ -133,7 +117,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
 
   const renderNode = (planned: RenderNode, layer: "fill" | "maskOutline", skipFillWrappers?: boolean) => {
     const g = current(planned);
-    const isClipped = g.pointerEvents !== true && Boolean(g.maskedBy?.length || g.clippedBy?.length);
+    const isClipped = g.pointerEvents !== true && isCut(g);
     const interaction = resolveInteraction?.(g);
     const pointerEvents = interaction?.pointerEvents ?? (isClipped ? false : undefined);
     return (
@@ -174,11 +158,12 @@ const RigLayers: React.FC<RigLayersProps> = ({
             id={`render_group_${group.id}`}
             key={item.key}
             opacity={group.opacity}
-            mask={group.maskId ? `url(#${group.maskId})` : undefined}
-            clipPath={group.clipId ? `url(#${group.clipId})` : undefined}
             style={group.blendMode && group.blendMode !== "normal" ? { mixBlendMode: group.blendMode } : undefined}
           >
-            {item.items.map(renderItem)}
+            {group.wrappers.reduceRight<ReactNode>(
+              (content, wrapper, index) => wrapWith(content, wrapper, `${item.key}_cut_${index}`),
+              item.items.map(renderItem),
+            )}
           </g>
         );
       }
@@ -188,25 +173,24 @@ const RigLayers: React.FC<RigLayersProps> = ({
   return (
     <PoseBindingsContext.Provider value={livePose?.bindings ?? null}>
       <HoistedDefsProvider>
-        <SpriteDefs body={body} nodes={posed?.nodes} />
-        {renderMaskDefs(plan.defs.maskFills, current)}
-        {renderMaskDefs(plan.defs.maskOutlines, current)}
-        {renderMaskDefs(plan.defs.clipOutlines, current)}
-        {renderMaskDefs(plan.defs.clipFills, current)}
-        <ClipPathDefs clipGroups={clipGroups} scopeId={scopeId} />
-        {outerOutline
-          ? plan.outerOutlines.map(current).map((g) => (
-              <SvgGroupOutline
-                key={`outer_${g.id}`}
-                g={g}
-                stroke={outerOutline.color}
-                strokeWidth={outerOutline.thickness}
-                scopeId={scopeId}
-                opacity={isHidden?.(g) ? 0 : g.opacity}
-              />
-            ))
-          : null}
-        {plan.items.map(renderItem)}
+        <RegionFormsContext.Provider value={plan.defs.forms}>
+          <SpriteDefs body={body} nodes={posed?.nodes} />
+          {renderMaskDefs(plan.defs.masks, plan.defs.forms, current)}
+          <ClipPathDefs defs={clipDefs} />
+          {outerOutline
+            ? plan.outerOutlines.map(current).map((g) => (
+                <SvgGroupOutline
+                  key={`outer_${g.id}`}
+                  g={g}
+                  stroke={outerOutline.color}
+                  strokeWidth={outerOutline.thickness}
+                  scopeId={scopeId}
+                  opacity={isHidden?.(g) ? 0 : g.opacity}
+                />
+              ))
+            : null}
+          {plan.items.map(renderItem)}
+        </RegionFormsContext.Provider>
       </HoistedDefsProvider>
     </PoseBindingsContext.Provider>
   );
