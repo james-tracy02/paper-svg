@@ -62,6 +62,8 @@ export { default as Rig } from "./render/Rig";
 export type { RigProps, RigHandle, RigEffects, GlowConfig, TintConfig } from "./render/Rig";
 export { default as RigLayers } from "./render/RigLayers";
 export type { RigLayersProps, RigNodeInteraction } from "./render/RigLayers";
+export { createLivePoser } from "./render/livePose";
+export type { LivePoser } from "./render/livePose";
 export { useRenderNodes } from "./render/useRenderNodes";
 export { bakePose } from "./render/pose";
 export { resolveRotationPivot } from "./render/rotationPivot";

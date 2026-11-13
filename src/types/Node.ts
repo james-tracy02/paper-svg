@@ -75,8 +75,6 @@ export type NodePaint = {
   gradientSpace?: "define" | "inherit";
   /** Composites this node with the others in the same group as one layer. */
   renderGroup?: RenderGroup;
-  /** A label the app can read off render nodes (e.g. to hide a set of them). */
-  renderGroupTag?: string;
 };
 
 /** A node's outline: its sprite's stroke, when drawn apart from its fill. */
