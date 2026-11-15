@@ -41,10 +41,10 @@ describe("Rig", () => {
   it("generates region masks and clips under idPrefix and applies them", () => {
     const body = part("root")
       // An outset keeps it a <mask> rather than a clip-path.
-      .addToRegion("soft", { inset: true })
+      .addToRegion("soft")
       .setRegionOutset("soft", 1)
       .addToRegion("hard")
-      .addJoints(part("masked").cutBy("soft").build(), part("clipped").cutBy("hard").build())
+      .addJoints(part("masked").maskedBy("soft").build(), part("clipped").clippedBy("hard").build())
       .build();
     const svg = render({ body, idPrefix: "demo" });
 
@@ -70,8 +70,8 @@ describe("Rig", () => {
     const body = part("root")
       .addToRegion("hard")
       .addJoints(
-        part("member").addToRegion("soft", { inset: true }).cutBy("hard").onlyWhereCut().build(),
-        part("masked").cutBy("soft").build(),
+        part("member").addToRegion("soft").clippedBy("hard").onlyWhereCut().build(),
+        part("masked").maskedBy("soft").build(),
       )
       .build();
     const svg = render({ body, idPrefix: "demo" });
@@ -85,7 +85,7 @@ describe("Rig", () => {
     const body = part("root")
       .setSprite(new SpriteBuilder().setPath(d).build())
       .addToRegion("hard")
-      .addJoints(part("clipped").cutBy("hard").build())
+      .addJoints(part("clipped").clippedBy("hard").build())
       .build();
     const clipPath = render({ body, idPrefix: "demo" }).match(/<clipPath id="demo_hard_region"[^>]*>(.*?)<\/clipPath>/)?.[1];
 
@@ -94,7 +94,7 @@ describe("Rig", () => {
 
   it("does not draw a node restricted to a group nobody defines", () => {
     const body = part("root")
-      .addJoints(part("masked").cutBy("missing").build(), part("clipped").cutBy("missing").build())
+      .addJoints(part("masked").maskedBy("missing").build(), part("clipped").clippedBy("missing").build())
       .build();
     const svg = render({ body });
 
@@ -149,7 +149,7 @@ describe("outlines", () => {
       .setSprite(stroked("#00ff00").build())
       .setCut(new SpriteBuilder().setShape("rect").setScale(2, 2).build())
       .addToRegion("hard")
-      .addJoints(part("dependent").setZIndex(3).cutBy("hard").build())
+      .addJoints(part("dependent").setZIndex(3).clippedBy("hard").build())
       .build();
     const svg = render({ body });
 

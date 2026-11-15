@@ -87,35 +87,42 @@ export type NodeOutline = {
    * then cut by those regions' full shapes, outlines included.
    */
   trace?: true | string[];
-  /**
-   * Keeps nodes this node's regions cut inside this node's outline by cutting the outline's inner half out of
-   * the regions, instead of lifting the outline above those nodes (hoisting, the default). Applies to every
-   * region the node joins (`insetOutlines`).
-   */
-  inset?: boolean;
 };
 
 /** A node's shape joining a region (`NodeBuilder.addToRegion`). */
 export type RegionJoin = {
   region: string;
-  /** Removes the node's shape from the region instead of adding it. */
+  /** Removes the node's shape from the region instead of adding it. Masks only: a clip-path can't subtract. */
   subtract?: boolean;
   /** Grows the node's shape in the region by this much on every side (world units). */
   outset?: number;
-  /** Insets the node's outline in this region instead of hoisting it (see `NodeOutline.inset`). */
-  inset?: boolean;
+  /**
+   * Whether the node's outline is lifted above the nodes the region clips. By default only a region of one
+   * member lifts it; in a region of several, outlines keep their z-index and the clipped nodes may paint over
+   * their inner half.
+   */
+  hoist?: boolean;
 };
 
 /**
+ * How a node is cut by a region: `clip` (`clippedBy`) draws the region as a <clipPath>, lifting a lone member's
+ * outline above the nodes it clips (hoisting, see `RegionJoin.hoist`); `mask` (`maskedBy`) draws it as a <mask>, with the inner half
+ * of each member's outline cut out of it (inset), and allows subtracting members.
+ */
+export type RegionCutMode = "clip" | "mask";
+
+/** A region cutting a node (`NodeBuilder.clippedBy`, `NodeBuilder.maskedBy`). */
+export type RegionCutRef = { region: string; mode: RegionCutMode };
+
+/**
  * The regions a node joins and is cut by. A region is the shapes of its members, added or subtracted; a node
- * cut by a region draws only inside it, and inside its members' outlines (see `NodeOutline.inset`). Whether a
- * region draws as a clip-path or a mask is the engine's choice.
+ * cut by a region draws only inside it, as a clip-path or a mask as the node asks (see `RegionCutMode`).
  */
 export type NodeRegions = {
   /** Regions this node's shape joins. */
   joins?: RegionJoin[];
   /** Regions this node is cut by. */
-  cuts?: string[];
+  cuts?: RegionCutRef[];
   /** Adds this node to its regions only where its own cuts leave it. */
   onlyWhereCut?: boolean;
   /** Passes this node's joins down, so every descendant joins the same regions. */

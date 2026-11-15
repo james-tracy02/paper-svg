@@ -145,7 +145,7 @@ const torso = (options: PuppetOptions): Node => {
     .setRotation(35)
     .setZIndex(1)
     .setSprite(paint.setFill("#ef4444").setShape("rect").setScale(13, 1.7).build())
-    .cutBy(options.clipSash ? TORSO_CLIP : undefined)
+    .clippedBy(options.clipSash ? TORSO_CLIP : undefined)
     .build();
 
   const badge = new NodeBuilder("badge")

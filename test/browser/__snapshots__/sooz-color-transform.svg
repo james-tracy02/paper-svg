@@ -664,10 +664,6 @@
 <path d="M 17.0328 -8.664 C 17.4898 -2.148 15.6655 5.6098 14.7184 10.417 C 13.9989 14.0689 11.6637 17.1385 9.2952 18.8306 C 6.9559 20.5018 2.0479 23.233 0 23.233 C -2.0479 23.233 -6.9559 20.5018 -9.2952 18.8306 C -11.6637 17.1385 -14.0457 14.0778 -14.7184 10.417 C -15.6039 5.5981 -17.4745 -2.1469 -17.0328 -8.664 C -16.0026 -23.865 15.9668 -23.8626 17.0328 -8.664 Z" transform="matrix(0.804, -0.005, 0.005, 0.804, 0.011, -134.732) matrix(2, 0, 0, 2, 0, -37.7)">
 </path>
 </clipPath>
-<clipPath id="fixture_head_eyes_region" clipPathUnits="userSpaceOnUse">
-<path d="M 17.0328 -8.664 C 17.4898 -2.148 15.6655 5.6098 14.7184 10.417 C 13.9989 14.0689 11.6637 17.1385 9.2952 18.8306 C 6.9559 20.5018 2.0479 23.233 0 23.233 C -2.0479 23.233 -6.9559 20.5018 -9.2952 18.8306 C -11.6637 17.1385 -14.0457 14.0778 -14.7184 10.417 C -15.6039 5.5981 -17.4745 -2.1469 -17.0328 -8.664 C -16.0026 -23.865 15.9668 -23.8626 17.0328 -8.664 Z" transform="matrix(0.804, -0.005, 0.005, 0.804, 0.011, -134.732) matrix(2, 0, 0, 2, 0, -37.7)">
-</path>
-</clipPath>
 <clipPath id="fixture_rightEye_region" clipPathUnits="userSpaceOnUse">
 <path d="M7.871,-0.01242c9.70195,-0.5823 18.97848,0.23312 26.30205,4.69153c0.02198,0.0134 0.03795,0.03477 0.04458,0.05964c1.46441,5.49833 2.46191,11.9945 1.08557,17.06602c-0.68897,2.53869 -1.98383,4.74081 -4.10473,6.27087c-2.11803,1.52799 -5.08376,2.39996 -9.09627,2.31429c-6.20659,-0.21769 -10.98202,-3.04902 -14.5695,-7.21041c-3.58664,-4.16042 -6.01222,-9.66412 -7.55664,-15.21624c-0.54611,-1.98701 -0.1003,-3.9105 1.24816,-5.35499c1.34491,-1.44069 3.60536,-2.4349 6.64679,-2.62072z" transform="matrix(0.812, 0.026, -0.02, 0.803, -15.937, -155.061) matrix(0.5, 0, 0, 0.5, 0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)">
 </path>
@@ -686,7 +682,7 @@
 </use>
 </g>
 <g transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358)" data-render-id="lower_body" data-rotate-chain="abdomen" style="pointer-events: visiblepainted;">
-<use href="#sym_14dgp4p" transform="matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="transparent" opacity="0" style="cursor: grab;">
+<use href="#sym_14dgp4p" transform="matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="transparent" opacity="0" style="cursor: grab; stroke-width: calc(3px * var(--zoom, 1));">
 </use>
 </g>
 <g transform="matrix(0.903, -0.0061, 0.0057, 0.8434, -0.2344, -170.9236)" data-render-id="hair_back" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
@@ -1400,12 +1396,12 @@
 </g>
 </g>
 <g transform="matrix(1.2487, 0, 0, 1.1352, 0, 25.7151)" data-render-id="crotch" data-rotate-chain="abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(1.5, 0, 0, 1.5, 0, -0.2) matrix(1, 0, 0, 1, -5.836, -5.0659)" style="cursor: grab;">
+<g transform="matrix(1.5, 0, 0, 1.5, 0, -0.2) matrix(1, 0, 0, 1, -5.836, -5.0659)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
 <use href="#sym_19wodtb" fill="#d3d8dc">
 </use>
 <use href="#sym_yl4txx" fill="#dae6ea">
 </use>
-<use href="#sym_1ciligg" fill="none">
+<use href="#sym_1ciligg" fill="none" stroke="#ffffff">
 </use>
 </g>
 </g>
@@ -1420,6 +1416,12 @@
 <g clip-path="url(#fixture_body_region)">
 <g transform="matrix(0.8325, 0, 0, 0.8041, 0, -75.1124)" data-render-id="underwear_top" data-rotate-chain="torso abdomen" style="pointer-events: none;">
 <use href="#sym_19spx20" transform="matrix(1.575, 0, 0, 1.575, 0, 1.5) matrix(1, 0, 0, 1, -111.4068, -112.2671)" fill="#c5c5c5" stroke="#ffffff" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+</use>
+</g>
+</g>
+<g mask="url(#fixture_body_region_outline)">
+<g transform="matrix(0.8325, 0, 0, 0.8041, 0, -75.1124)" data-render-id="underwear_top_outline" style="pointer-events: none;">
+<use href="#sym_19spx20" transform="matrix(1.575, 0, 0, 1.575, 0, 1.5) matrix(1, 0, 0, 1, -111.4068, -112.2671)" fill="#ffffff" stroke="#ffffff" style="cursor: grab; stroke-width: calc((1px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </use>
 </g>
 </g>
@@ -1442,8 +1444,22 @@
 <rect transform="matrix(1, 0, 0, 1, 0, 5)" fill="#c5c5c5" x="-5" y="-5" width="10" height="10" style="cursor: grab;">
 </rect>
 </g>
+</g>
+<g mask="url(#fixture_body_region_outline)">
+<g transform="matrix(0.3231, 0.0778, -1.007, 3.9011, -20.8125, -123.3584)" data-render-id="underwear_top_strap_right_outline" style="pointer-events: none;">
+<rect transform="matrix(1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
+</rect>
+</g>
+</g>
+<g clip-path="url(#fixture_body_region)">
 <g transform="matrix(0.3231, -0.0778, 1.007, 3.9011, 20.8125, -123.3584)" data-render-id="underwear_top_strap_left" data-rotate-chain="underwear_top_strap_left torso abdomen" style="pointer-events: none;">
 <rect transform="matrix(-1, 0, 0, 1, 0, 5)" fill="#c5c5c5" x="-5" y="-5" width="10" height="10" style="cursor: grab;">
+</rect>
+</g>
+</g>
+<g mask="url(#fixture_body_region_outline)">
+<g transform="matrix(0.3231, -0.0778, 1.007, 3.9011, 20.8125, -123.3584)" data-render-id="underwear_top_strap_left_outline" style="pointer-events: none;">
+<rect transform="matrix(-1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
 </rect>
 </g>
 </g>
@@ -1467,71 +1483,27 @@
 </rect>
 </g>
 </g>
-<g transform="matrix(1.2487, 0, 0, 1.1352, 0, 19.358)" data-render-id="lower_body_outline" data-rotate-chain="abdomen" style="pointer-events: visiblepainted;">
-<use href="#sym_14dgp4p" transform="matrix(0.915, 0, 0, 1, 0, 0) matrix(1, 0, 0, 1, -41.5781, -12.3672)" fill="none" opacity="0" style="cursor: grab; stroke-width: calc(3px * var(--zoom, 1));">
-</use>
-</g>
-<g transform="matrix(1.2487, 0, 0, 1.1352, 0, 25.7151)" data-render-id="crotch_outline" data-rotate-chain="abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(1.5, 0, 0, 1.5, 0, -0.2) matrix(1, 0, 0, 1, -5.836, -5.0659)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
-<use href="#sym_19wodtb" fill="none">
-</use>
-<use href="#sym_yl4txx" fill="none">
-</use>
-<use href="#sym_1ciligg" fill="none" stroke="#ffffff">
-</use>
-</g>
-</g>
-<g mask="url(#fixture_body_region_outline)">
-<g transform="matrix(0.3231, 0.0778, -1.007, 3.9011, -20.8125, -123.3584)" data-render-id="underwear_top_strap_right_outline_outline" style="pointer-events: none;">
-<rect transform="matrix(1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((2px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
-</rect>
-</g>
-</g>
-<g mask="url(#fixture_body_region_outline)">
-<g transform="matrix(0.3231, -0.0778, 1.007, 3.9011, 20.8125, -123.3584)" data-render-id="underwear_top_strap_left_outline_outline" style="pointer-events: none;">
-<rect transform="matrix(-1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((2px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
-</rect>
-</g>
-</g>
-<g mask="url(#fixture_body_region_outline)">
-<g transform="matrix(0.8325, 0, 0, 0.8041, 0, -75.1124)" data-render-id="underwear_top_outline" style="pointer-events: none;">
-<use href="#sym_19spx20" transform="matrix(1.575, 0, 0, 1.575, 0, 1.5) matrix(1, 0, 0, 1, -111.4068, -112.2671)" fill="#ffffff" stroke="#ffffff" style="cursor: grab; stroke-width: calc((1px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
-</use>
-</g>
-</g>
-<g mask="url(#fixture_body_region_outline)">
-<g transform="matrix(0.3231, 0.0778, -1.007, 3.9011, -20.8125, -123.3584)" data-render-id="underwear_top_strap_right_outline" style="pointer-events: none;">
-<rect transform="matrix(1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
-</rect>
-</g>
-</g>
-<g mask="url(#fixture_body_region_outline)">
-<g transform="matrix(0.3231, -0.0778, 1.007, 3.9011, 20.8125, -123.3584)" data-render-id="underwear_top_strap_left_outline" style="pointer-events: none;">
-<rect transform="matrix(-1, 0, 0, 1, 0, 5)" fill="#ffffff" x="-5" y="-5" width="10" height="10" stroke="#ffffff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc((0px + 1 * var(--stroke-pad, 0.35px)) * var(--zoom, 1));">
-</rect>
-</g>
-</g>
 <g transform="matrix(0.8457, -0.0057, 0.0057, 0.8457, -23.809, -151.8003)" data-render-id="ear_right" data-rotate-chain="head torso abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(0.6, 0, 0, 0.6, -4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab;">
-<use href="#sym_7tkia" fill="#001529">
+<g transform="matrix(0.6, 0, 0, 0.6, -4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+<use href="#sym_7tkia" fill="#001529" stroke="#ffffff">
 </use>
 <use href="#sym_1uqxfjh" fill="#21576b">
 </use>
 <use href="#sym_lfbt9y" fill="#21576b">
 </use>
-<use href="#sym_1547bdo" fill="none">
+<use href="#sym_1547bdo" fill="none" stroke="#ffffff">
 </use>
 </g>
 </g>
 <g transform="matrix(0.8457, -0.0057, 0.0057, 0.8457, 23.5974, -152.1218)" data-render-id="ear_left" data-rotate-chain="head torso abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(-0.6, 0, 0, 0.6, 4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab;">
-<use href="#sym_7tkia" fill="#001529">
+<g transform="matrix(-0.6, 0, 0, 0.6, 4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+<use href="#sym_7tkia" fill="#001529" stroke="#ffffff">
 </use>
 <use href="#sym_1uqxfjh" fill="#21576b">
 </use>
 <use href="#sym_lfbt9y" fill="#21576b">
 </use>
-<use href="#sym_1547bdo" fill="none">
+<use href="#sym_1547bdo" fill="none" stroke="#ffffff">
 </use>
 </g>
 </g>
@@ -1559,30 +1531,6 @@
 <g transform="matrix(0.8457, -0.0057, 0.0057, 0.8457, 23.5974, -152.1218)" data-render-id="ear_blush_left" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
 <ellipse transform="matrix(-5, 0, 0, 5, 0, 0)" fill="url(#fuzzy_8d30ca)" rx="5" ry="5" opacity="0.075" style="cursor: grab;">
 </ellipse>
-</g>
-</g>
-<g transform="matrix(0.8457, -0.0057, 0.0057, 0.8457, -23.809, -151.8003)" data-render-id="ear_right_outline" data-rotate-chain="head torso abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(0.6, 0, 0, 0.6, -4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
-<use href="#sym_7tkia" fill="none" stroke="#ffffff">
-</use>
-<use href="#sym_1uqxfjh" fill="none">
-</use>
-<use href="#sym_lfbt9y" fill="none">
-</use>
-<use href="#sym_1547bdo" fill="none" stroke="#ffffff">
-</use>
-</g>
-</g>
-<g transform="matrix(0.8457, -0.0057, 0.0057, 0.8457, 23.5974, -152.1218)" data-render-id="ear_left_outline" data-rotate-chain="head torso abdomen" style="pointer-events: visiblepainted;">
-<g transform="matrix(-0.6, 0, 0, 0.6, 4, -1) matrix(1, 0, 0, 1, -10.0313, -16.4375)" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
-<use href="#sym_7tkia" fill="none" stroke="#ffffff">
-</use>
-<use href="#sym_1uqxfjh" fill="none">
-</use>
-<use href="#sym_lfbt9y" fill="none">
-</use>
-<use href="#sym_1547bdo" fill="none" stroke="#ffffff">
-</use>
 </g>
 </g>
 <g transform="matrix(1.6437, 0, 0, 1.6336, 0, -23.271)" data-render-id="skirt_waist" data-rotate-chain="abdomen" style="pointer-events: visiblepainted;">
@@ -1851,7 +1799,7 @@
 </g>
 </g>
 </g>
-<g clip-path="url(#fixture_head_eyes_region)">
+<g mask="url(#fixture_head_eyes_region_inset)">
 <g transform="matrix(0.7966, 0.1651, -0.1606, 0.7866, -19.1136, -151.545)" data-render-id="lower_lash_0_right" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
 <use href="#sym_1qigy9z" transform="matrix(0.08, 0, 0, 0.08, -0.49, 0.68) matrix(1, 0, 0, 1, -102.3767, -140.8519)" fill="#ffffff" stroke="none" style="cursor: grab; stroke-width: calc(0.67px * var(--zoom, 1));">
 </use>
@@ -1869,11 +1817,11 @@
 </use>
 </g>
 <g transform="matrix(0.8124, 0.026, -0.0198, 0.8033, -15.9374, -155.0612)" data-render-id="eyewhite_right" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
-<use href="#sym_khrj4e" transform="matrix(0.5, 0, 0, 0.5, 0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="#000000" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+<use href="#sym_khrj4e" transform="matrix(0.5, 0, 0, 0.5, 0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="#000000" style="cursor: grab;">
 </use>
 </g>
 <g transform="matrix(0.812, -0.037, 0.0307, 0.803, 15.6823, -155.2756)" data-render-id="eyewhite_left" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
-<use href="#sym_khrj4e" transform="matrix(-0.5, 0, 0, 0.5, -0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="#000000" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+<use href="#sym_khrj4e" transform="matrix(-0.5, 0, 0, 0.5, -0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="#000000" style="cursor: grab;">
 </use>
 </g>
 <g transform="matrix(0.7566, 0.2992, -0.2965, 0.746, -18.4679, -161.2524)" data-render-id="lash_0_right_outline" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
@@ -1943,7 +1891,7 @@
 </g>
 </g>
 </g>
-<g clip-path="url(#fixture_head_eyes_region)">
+<g mask="url(#fixture_head_eyes_region_inset)">
 <g transform="matrix(0.8124, 0.026, -0.0198, 0.8033, -15.9374, -155.0612)" data-render-id="eyelash_right" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
 <use href="#sym_1cmbchb" transform="matrix(0.5, 0, 0, 0.5, -0.4, -4.6175) matrix(1, 0, 0, 1, -22.0781, -11.2559)" fill="#ffffff" stroke="none" style="cursor: grab; stroke-width: calc(0.67px * var(--zoom, 1));">
 </use>
@@ -1999,7 +1947,7 @@
 </g>
 </g>
 </g>
-<g clip-path="url(#fixture_head_eyes_region)">
+<g mask="url(#fixture_head_eyes_region_inset)">
 <g transform="matrix(0.812, -0.037, 0.0307, 0.803, 15.6823, -155.2756)" data-render-id="eyelash_left" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
 <use href="#sym_1cmbchb" transform="matrix(-0.5, 0, 0, 0.5, 0.4, -4.6175) matrix(1, 0, 0, 1, -22.0781, -11.2559)" fill="#ffffff" stroke="none" style="cursor: grab; stroke-width: calc(0.67px * var(--zoom, 1));">
 </use>
@@ -2034,6 +1982,14 @@
 </g>
 <g transform="matrix(0.9265, -0.3083, 0.304, 0.914, 22.1475, -160.7228)" data-render-id="lash_2_left" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
 <use href="#sym_coc9uw" transform="matrix(-0.14, 0, 0, 0.14, 1.248, -1.034) matrix(1, 0, 0, 1, -106.087, -95.4513)" fill="#ffffff" style="cursor: grab;">
+</use>
+</g>
+<g transform="matrix(0.8124, 0.026, -0.0198, 0.8033, -15.9374, -155.0612)" data-render-id="eyewhite_right_outline" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
+<use href="#sym_khrj4e" transform="matrix(0.5, 0, 0, 0.5, 0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="none" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
+</use>
+</g>
+<g transform="matrix(0.812, -0.037, 0.0307, 0.803, 15.6823, -155.2756)" data-render-id="eyewhite_left_outline" data-rotate-chain="head torso abdomen" style="pointer-events: none;">
+<use href="#sym_khrj4e" transform="matrix(-0.5, 0, 0, 0.5, -0.6, -0.4) matrix(1, 0, 0, 1, -17.8481, -15.1072)" fill="none" style="cursor: grab; stroke-width: calc(1px * var(--zoom, 1));">
 </use>
 </g>
 </g>

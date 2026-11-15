@@ -8,7 +8,7 @@ import SvgGroupOutline from "./GroupOutline";
 import SpriteDefs from "./SpriteDefs";
 import ClipPathDefs from "./ClipPathDefs";
 import type { RenderNode } from "./RenderTree";
-import { RegionFormsContext, wrapWith } from "./fillWrappers";
+import { maskOutlineRuns, RegionFormsContext, wrapWith } from "./fillWrappers";
 import { isCut } from "./regions";
 import { HoistedDefsProvider } from "./HoistedDefs";
 import { planLayers, resolveVisibleNodes, type PaintItem, type RegionDef, type RegionForms } from "./layerPlan";
@@ -115,7 +115,12 @@ const RigLayers: React.FC<RigLayersProps> = ({
   // After each commit the DOM shows these nodes again, wherever a written pose had moved them.
   useLayoutEffect(() => livePose?.committed(posed), [livePose, posed]);
 
-  const renderNode = (planned: RenderNode, layer: "fill" | "maskOutline", skipFillWrappers?: boolean) => {
+  const renderNode = (
+    planned: RenderNode,
+    layer: "fill" | "maskOutline",
+    skipFillWrappers?: boolean,
+    skipOutlineWrappers?: boolean,
+  ) => {
     const g = current(planned);
     const isClipped = g.pointerEvents !== true && isCut(g);
     const interaction = resolveInteraction?.(g);
@@ -132,9 +137,21 @@ const RigLayers: React.FC<RigLayersProps> = ({
         opacity={isHidden?.(g) ? 0 : g.opacity}
         layer={layer}
         skipFillWrappers={skipFillWrappers}
+        skipOutlineWrappers={skipOutlineWrappers}
       />
     );
   };
+
+  // Traced outlines sharing their outline masks are masked once per run: each mask is a layer of its own.
+  const renderMaskOutlines = (planned: RenderNode[]) =>
+    maskOutlineRuns(planned, plan.defs.forms).map(({ masks, nodes: run }) => {
+      if (run.length === 1 || !masks.length) return run.map((node) => renderNode(node, "maskOutline"));
+      const key = `mask_outlines_${run[0].id}`;
+      return masks.reduceRight<ReactNode>(
+        (content, mask, index) => wrapWith(content, `mask:${mask}`, `${key}_${index}`),
+        run.map((node) => renderNode(node, "maskOutline", false, true)),
+      );
+    });
 
   const renderItem = (item: PaintItem): ReactNode => {
     switch (item.kind) {
@@ -144,11 +161,11 @@ const RigLayers: React.FC<RigLayersProps> = ({
         return (
           <Fragment key={item.key}>
             {renderNode(item.node, "fill")}
-            {item.maskOutlines.map((node) => renderNode(node, "maskOutline"))}
+            {renderMaskOutlines(item.maskOutlines)}
           </Fragment>
         );
       case "maskOutlines":
-        return <Fragment key={item.key}>{item.nodes.map((node) => renderNode(node, "maskOutline"))}</Fragment>;
+        return <Fragment key={item.key}>{renderMaskOutlines(item.nodes)}</Fragment>;
       case "wrap":
         return wrapWith(item.items.map(renderItem), item.wrapper, item.key);
       case "renderGroup": {

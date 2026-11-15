@@ -111,31 +111,35 @@ Children are already built when you add them, so build them for the matching sid
 ### Regions
 
 Nodes can cut each other out, across different branches of the tree, through named regions. A region is the
-shapes of the nodes that join it; a node cut by it draws only inside it.
+shapes of the nodes that join it; a node cut by it draws only inside it. You choose how each node is cut:
 
 | Call                                    | Does                                                           |
 | --------------------------------------- | -------------------------------------------------------------- |
 | `addToRegion(name)`                     | Adds the node's shape to the region                            |
-| `addToRegion(name, { subtract: true })` | Removes the node's shape from it                               |
+| `addToRegion(name, { subtract: true })` | Removes the node's shape from it (masks only)                  |
 | `addToRegion(name, { outset: 1 })`      | Grows the node's shape in it                                   |
-| `cutBy(name)`                           | Draws the node only inside the region                          |
+| `clippedBy(name)`                       | Draws the node only inside the region, with a `<clipPath>`     |
+| `maskedBy(name)`                        | Draws the node only inside the region, with a `<mask>`         |
 | `setCut(sprite)`                        | Draws the node only inside a shape of its own                  |
 | `traceOutline()`                        | Where the node covers its regions' outlines, draws them in its outline colour |
 
-A node cut by a region stays inside its members' outlines. By default each member lifts its outline above the
-nodes the region cuts (hoisting); `addToRegion(name, { inset: true })`, or `insetOutlines()` for all of a node's
-regions, cuts the outline out of the region instead, so the outline keeps its own z-index.
+Either way the node stays inside the members' outlines:
 
-You don't choose between `<clipPath>` and `<mask>`: the engine draws a region as a clip-path where its edges are
-hard, which is cheaper, and as a mask where it subtracts or cuts out an outline.
+- **`clippedBy`** lifts each stroked member's outline just above the highest node the region clips (hoisting).
+  It's the cheap cut, so use it by default. It can't subtract: a region with subtracting members is masked
+  instead, with a console warning.
+- **`maskedBy`** cuts the inner half of each member's outline out of the region, so outlines keep their own
+  z-index, and allows subtracting members. Every mask is a layer of its own, which costs far more than a
+  clip-path when the browser rasterizes in software, so keep masks for what needs them.
 
 `regionsForChildren()` adds a node's descendants to its regions; `cutsForChildren()` cuts its descendants by its
 cuts. `stopInheritedRegions()` and `stopInheritedCuts()` end that for a node and its descendants.
 
 > A node cut by a region that no node joins is not drawn.
 
-Upgrading from 0.3: run `node node_modules/paper-svg/scripts/migrate-0.4.mjs tsconfig.json --write`. It rewrites
-each mask and clip call to the region call that draws the same: mask groups become regions with `inset: true`.
+Upgrading from 0.5: `cutBy` is gone. Use `clippedBy` where the region adds shapes and outlines may be lifted,
+`maskedBy` where it subtracts or an outline must keep its z-index. `addToRegion`'s `inset` option and
+`insetOutlines()` are gone too: masks always inset, clips always hoist.
 
 ### Constraints
 

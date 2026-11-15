@@ -94,11 +94,14 @@ describe("NodeBuilder", () => {
 
   it("skips undefined children and region names", () => {
     const child = new NodeBuilder("child").build();
-    const node = new NodeBuilder("part").addJoints(undefined, child).addAttachments(undefined).cutBy([undefined, "", "m"]).build();
+    const node = new NodeBuilder("part").addJoints(undefined, child).addAttachments(undefined).clippedBy([undefined, "", "m"]).maskedBy("n").build();
 
     expect(node.joints).toEqual([child]);
     expect(node.attachments).toEqual([]);
-    expect(node.regions?.cuts).toEqual(["m"]);
+    expect(node.regions?.cuts).toEqual([
+      { region: "m", mode: "clip" },
+      { region: "n", mode: "mask" },
+    ]);
   });
 });
 

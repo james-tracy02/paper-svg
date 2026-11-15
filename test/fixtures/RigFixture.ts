@@ -116,9 +116,9 @@ const definedOnly = <T extends Record<string, unknown>>(group: T): T | undefined
 };
 
 /**
- * Version 3 masking fields as regions, keeping what they drew: mask groups inset their members' outlines, clip
- * groups hoist them unless the node disabled hoisting (`insetOutlines`), and a mask outline traces the node's cuts
- * or the regions it named.
+ * Version 3 masking fields as regions: `maskedBy` cuts become masks (which inset their members' outlines),
+ * `clippedBy` cuts clips (which hoist them), and a mask outline traces the node's cuts or the regions it named.
+ * Version 3's `disableHoisting` has no counterpart: a clip always hoists.
  */
 const upgradeV3Node = (node: V3Node): Node => {
   const {
@@ -132,14 +132,16 @@ const upgradeV3Node = (node: V3Node): Node => {
         region,
         subtract: maskGroupModes?.[region] === "negative" || undefined,
         outset: maskOutsets?.[region] || undefined,
-        inset: true,
       })!,
     ),
     ...(clippingGroups ?? []).map((region) => definedOnly({ region, outset: clipOutsets?.[region] || undefined })!),
   ];
-  const cuts = [...(maskedBy ?? []), ...(clippedBy ?? [])];
+  const cuts = [
+    ...(maskedBy ?? []).map((region) => ({ region, mode: "mask" as const })),
+    ...(clippedBy ?? []).map((region) => ({ region, mode: "clip" as const })),
+  ];
   const traced = [...(outlineMaskedBy ?? []), ...(outlineClippedBy ?? [])];
-  const { masked, disableHoisting, ...outlineRest } = outline ?? {};
+  const { masked, disableHoisting: _disableHoisting, ...outlineRest } = outline ?? {};
   const { clip: _paintClip, ...paintRest } = paint ?? {};
   return {
     ...rest,
@@ -147,7 +149,6 @@ const upgradeV3Node = (node: V3Node): Node => {
     outline: definedOnly({
       ...outlineRest,
       trace: masked ? (traced.length ? traced : true) : undefined,
-      inset: disableHoisting || undefined,
     }),
     regions: definedOnly({
       joins: joins.length ? joins : undefined,

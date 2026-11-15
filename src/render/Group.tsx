@@ -4,9 +4,9 @@ import SvgSpriteMask, { spriteMaskAttributes } from "./SpriteMask";
 import type { RenderNode } from "./RenderTree";
 import { matrixTransformToSvg } from "./transform";
 import SvgSpritePattern from "./Pattern";
-import { getFillWrapTargets, RegionFormsContext, wrapFill } from "./fillWrappers";
+import { getFillWrapTargets, getOutlineWrapTargets, RegionFormsContext, wrapFill } from "./fillWrappers";
 import { bindPose, displayOf, joinRefs, PoseBindingsContext, setAttr, type PoseBindings } from "./poseBindings";
-import { isCut, outlineCuts } from "./regions";
+import { isCut } from "./regions";
 
 export type SvgGroupProps = {
   g: RenderNode;
@@ -23,6 +23,8 @@ export type SvgGroupProps = {
   skipClipPaths?: boolean;
   /** When true, the fill gets no mask or clip-path wrappers; the caller wraps a run of fills sharing them. */
   skipFillWrappers?: boolean;
+  /** When true, the traced outline gets no outline mask wrappers; the caller wraps a run of outlines sharing them. */
+  skipOutlineWrappers?: boolean;
 };
 
 /**
@@ -56,6 +58,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
   spriteStrokeOverride,
   skipClipPaths,
   skipFillWrappers,
+  skipOutlineWrappers,
 }) => {
   const bindings = useContext(PoseBindingsContext);
   const forms = useContext(RegionFormsContext);
@@ -79,9 +82,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     : undefined;
   const fillWrapTargets = getFillWrapTargets(g, skipClipPaths, forms);
   // A traced outline is cut by the outlines of the regions it traces.
-  const outlineWrapTargets = g.traceOutline
-    ? outlineCuts(g).flatMap((name) => forms.get(name)?.outlineMaskId ?? [])
-    : [];
+  const outlineWrapTargets = getOutlineWrapTargets(g, forms);
   const outerStyle = g.blendMode ? { mixBlendMode: g.blendMode } : undefined;
   const clickableStyle = clickable ? { cursor: "pointer" } : undefined;
   // Cut nodes keep pointer events off, whether a region cuts them with a mask or a clip-path.
@@ -212,7 +213,7 @@ const SvgGroup: React.FC<SvgGroupProps> = ({
     ) : (
       outlineNode
     );
-    outlineGroup = wrapWithMasks(baseOutlineGroup, outlineWrapTargets, "outline");
+    outlineGroup = skipOutlineWrappers ? baseOutlineGroup : wrapWithMasks(baseOutlineGroup, outlineWrapTargets, "outline");
   }
 
   if (layer === "fill") {
@@ -241,5 +242,6 @@ const areEqual = (a: SvgGroupProps, b: SvgGroupProps) =>
   a.spriteStrokeOverride === b.spriteStrokeOverride &&
   a.skipClipPaths === b.skipClipPaths &&
   a.skipFillWrappers === b.skipFillWrappers &&
+  a.skipOutlineWrappers === b.skipOutlineWrappers &&
   a.layer === b.layer;
 export default React.memo(SvgGroup, areEqual);

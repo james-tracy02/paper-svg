@@ -2,7 +2,7 @@ import { createContext } from "react";
 import type React from "react";
 import type { RegionForms } from "./layerPlan";
 import type { RenderNode } from "./RenderTree";
-import { fillCuts } from "./regions";
+import { fillCutRefs, outlineCuts } from "./regions";
 
 /**
  * How the layer plan draws each region's shapes (see `planDefs`). Provided by RigLayers, so nodes that wrap
@@ -18,23 +18,52 @@ export type FillWrapTargets = {
 };
 
 /**
- * Mask and clip-path ids a node's fill is wrapped in (see wrapFill): for each region cutting it, the full shape
- * when the node traces its outline (`traceOutline`), else the inset shape, as a clip-path where the plan lets
- * the node take one.
+ * Mask and clip-path ids a node's fill is wrapped in (see wrapFill), as each of its cuts asks: the region's
+ * clip-path (`clippedBy`), or its mask (`maskedBy`): the full shape when the node traces the region's outline,
+ * else the inset shape.
  */
 export const getFillWrapTargets = (g: RenderNode, skipClipPaths: boolean | undefined, forms: RegionForms): FillWrapTargets => {
   const maskTargets: string[] = [];
   const clipTargets = new Set<string>();
-  for (const name of fillCuts(g)) {
-    const form = forms.get(name)?.[g.traceOutline ? "full" : "inset"];
+  for (const { region, mode } of fillCutRefs(g)) {
+    const form = forms.get(region);
     if (!form) continue;
-    if (form.clipId && (!form.clipUsers || form.clipUsers.has(g.id))) {
+    if (mode === "clip" && form.clipId) {
       if (!skipClipPaths) clipTargets.add(form.clipId);
-    } else if (form.maskId) {
-      maskTargets.push(form.maskId);
+    } else {
+      // A clip the region can't draw as a clip-path falls back to its full mask (see planDefs).
+      const maskId = mode === "clip" || g.traceOutline ? form.fullMaskId : form.maskId;
+      if (maskId) maskTargets.push(maskId);
     }
   }
   return { maskTargets, clipTargets: [...clipTargets] };
+};
+
+/** Mask ids a node's traced outline (`traceOutline`) is cut by: the outline shapes of the regions it traces. */
+export const getOutlineWrapTargets = (g: RenderNode, forms: RegionForms): string[] =>
+  g.traceOutline ? outlineCuts(g).flatMap((name) => forms.get(name)?.outlineMaskId ?? []) : [];
+
+/** Traced outlines painted back to back that share their outline masks, applied once around the run. */
+export type MaskOutlineRun = { masks: string[]; nodes: RenderNode[] };
+
+/**
+ * Splits traced outlines, in paint order, into runs sharing the same outline masks, so each run is masked once
+ * instead of once per node. A blend-mode outline stays alone: it composites inside its own masks.
+ */
+export const maskOutlineRuns = (nodes: RenderNode[], forms: RegionForms): MaskOutlineRun[] => {
+  const runs: MaskOutlineRun[] = [];
+  let last: { run: MaskOutlineRun; joinable: boolean } | undefined;
+  for (const node of nodes) {
+    const masks = getOutlineWrapTargets(node, forms);
+    const joinable = masks.length > 0 && !node.blendMode;
+    if (joinable && last?.joinable && last.run.masks.join(" ") === masks.join(" ")) {
+      last.run.nodes.push(node);
+      continue;
+    }
+    last = { run: { masks, nodes: [node] }, joinable };
+    runs.push(last.run);
+  }
+  return runs;
 };
 
 /** One wrapper around a fill: `clip:<clipPath id>` or `mask:<mask id>`. */

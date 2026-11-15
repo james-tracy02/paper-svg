@@ -19,7 +19,7 @@
 <ellipse transform="matrix(2, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>
 </g>
-<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 29.3825, 173.804)" data-render-id="foot_right" data-rotate-chain="shin_right thigh_right" style="pointer-events: visiblepainted;">
+<g transform="matrix(0.9994, 0.0349, -0.0349, 0.9994, 31.3812, 173.8738)" data-render-id="foot_right" data-rotate-chain="shin_right thigh_right" style="pointer-events: visiblepainted;">
 <ellipse transform="matrix(3.4, 0, 0, 1.5, 0, 0)" fill="#000000ff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>
 </g>
@@ -31,7 +31,7 @@
 <ellipse transform="matrix(-2, 0, 0, 7.4, 0, 37)" fill="#3b5b92" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>
 </g>
-<g transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -29.3825, 173.804)" data-render-id="foot_left" data-rotate-chain="shin_left thigh_left" style="pointer-events: visiblepainted;">
+<g transform="matrix(0.9994, -0.0349, 0.0349, 0.9994, -31.3812, 173.8738)" data-render-id="foot_left" data-rotate-chain="shin_left thigh_left" style="pointer-events: visiblepainted;">
 <ellipse transform="matrix(-3.4, 0, 0, 1.5, 0, 0)" fill="#000000ff" rx="5" ry="5" stroke="#000000ff" vector-effect="non-scaling-stroke" style="cursor: grab; stroke-width: calc(2px * var(--zoom, 1));">
 </ellipse>
 </g>

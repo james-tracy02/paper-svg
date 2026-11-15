@@ -1,6 +1,6 @@
 import type { Vector2 } from "./primitives";
 import type { CSSProperties } from "react";
-import type { Node, NodeFollow, NodePaint, RegionJoin } from "./Node";
+import type { Node, NodeFollow, NodePaint, RegionCutMode, RegionCutRef, RegionJoin } from "./Node";
 import type { Sprite } from "./Sprite";
 import type { TransformState } from "./TransformState";
 import type { Transform } from "./Transform";
@@ -34,7 +34,7 @@ interface BuilderState {
   mask?: Sprite;
   joins: RegionJoin[];
   regionOutsets: Record<string, number>;
-  cuts: string[];
+  cuts: RegionCutRef[];
   onlyWhereCut?: boolean;
   regionsForChildren?: boolean;
   cutsForChildren?: boolean;
@@ -47,7 +47,6 @@ interface BuilderState {
   zIndexMode: "relative" | "absolute";
   traceOutline?: boolean;
   traceRegions: string[];
-  insetOutlines?: boolean;
   opacity?: number;
   renderGroup?: RenderGroup;
   debugColor?: string;
@@ -260,19 +259,20 @@ export default class NodeBuilder {
   }
 
   /**
-   * Adds this node's shape to the named regions, or with `subtract` removes it. `outset` grows the shape in the
-   * region by that much on every side (world units). `inset` keeps the nodes the region cuts inside this node's
-   * outline by cutting the outline out of the region, instead of lifting it above them (hoisting, the default).
-   * Joining a region again replaces its options.
+   * Adds this node's shape to the named regions, or with `subtract` removes it (for regions used by `maskedBy`:
+   * a clip-path can't subtract). `outset` grows the shape in the region by that much on every side (world units).
+   * How the node's outline meets the nodes the region cuts follows from how they're cut: `maskedBy` cuts its inner
+   * half out of the region; `clippedBy` lifts it above them when the region has just this one member, else leaves
+   * it in place. `hoist` overrides that for a clip. Joining a region again replaces its options.
    */
-  addToRegion(names: RegionNames, options: { subtract?: boolean; outset?: number; inset?: boolean } = {}): NodeBuilder {
+  addToRegion(names: RegionNames, options: { subtract?: boolean; outset?: number; hoist?: boolean } = {}): NodeBuilder {
     const added = regionNames(names);
     if (!added.length) return this;
     const join = (region: string): RegionJoin => ({
       region,
       ...(options.subtract ? { subtract: true } : {}),
       ...(options.outset ? { outset: options.outset } : {}),
-      ...(options.inset ? { inset: true } : {}),
+      ...(options.hoist !== undefined ? { hoist: options.hoist } : {}),
     });
     return this.with({
       joins: [...this._state.joins.filter((existing) => !added.includes(existing.region)), ...added.map(join)],
@@ -284,13 +284,29 @@ export default class NodeBuilder {
     return this.with({ regionOutsets: { ...this._state.regionOutsets, [name]: outset } });
   }
 
-  /**
-   * Cuts this node by the named regions: it draws only inside each, and inside its members' outlines (each member
-   * either hoists its outline over this node or insets it). Repeats are kept, as each cut applies again.
-   */
-  cutBy(names: RegionNames): NodeBuilder {
+  private cutWith(names: RegionNames, mode: RegionCutMode): NodeBuilder {
     const added = regionNames(names);
-    return added.length ? this.with({ cuts: [...this._state.cuts, ...added] }) : this;
+    return added.length ? this.with({ cuts: [...this._state.cuts, ...added.map((region) => ({ region, mode }))] }) : this;
+  }
+
+  /**
+   * Clips this node to the named regions with a <clipPath>: it draws only inside each. Each stroked member's
+   * outline is lifted just above the highest node the region clips, so the clipped nodes stay inside it. The
+   * cheap cut: use it unless a region subtracts members or an outline must keep its own z-index (`maskedBy`).
+   * Repeats are kept, as each cut applies again.
+   */
+  clippedBy(names: RegionNames): NodeBuilder {
+    return this.cutWith(names, "clip");
+  }
+
+  /**
+   * Masks this node by the named regions with a <mask>: it draws only inside each, and inside its members'
+   * outlines, whose inner half is cut out of the region so they keep their own z-index. Allows subtracting
+   * members (`addToRegion(name, { subtract: true })`). Each mask is a layer of its own, so it costs more than
+   * `clippedBy`. Repeats are kept, as each cut applies again.
+   */
+  maskedBy(names: RegionNames): NodeBuilder {
+    return this.cutWith(names, "mask");
   }
 
   /**
@@ -306,11 +322,6 @@ export default class NodeBuilder {
   traceOutlineOf(names: RegionNames): NodeBuilder {
     const added = regionNames(names);
     return added.length ? this.with({ traceOutline: true, traceRegions: [...this._state.traceRegions, ...added] }) : this;
-  }
-
-  /** Insets this node's outline in every region it joins (see `addToRegion`), instead of hoisting it. */
-  insetOutlines(enabled: boolean = true): NodeBuilder {
-    return this.with({ insetOutlines: enabled || undefined });
   }
 
   /** Adds this node to its regions only where its own cuts leave it, not its whole shape. */
@@ -450,7 +461,6 @@ export default class NodeBuilder {
       outline: definedOnly({
         zIndex: s.outlineZIndex,
         trace: s.traceOutline ? (s.traceRegions.length ? s.traceRegions : true) : undefined,
-        inset: s.insetOutlines,
       }),
       interaction: definedOnly({
         articulated: s.articulated,

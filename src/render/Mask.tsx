@@ -5,7 +5,7 @@ import React, { useContext, useMemo } from "react";
 import { matrixTransformToSvg } from "./transform";
 import { maskProps } from "./maskProps";
 import { getSpriteSignature } from "./utils/getSpriteSignature";
-import { fillCuts, membership } from "./regions";
+import { fillCutRefs, membership } from "./regions";
 import type { RegionForms, RegionShape } from "./layerPlan";
 import { getMaskRegion, type Bounds } from "./spriteBounds";
 import { bindPose, displayOf, PoseBindingsContext, setAttr } from "./poseBindings";
@@ -85,14 +85,15 @@ const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
     return map;
   }, [spriteMaskEntries]);
 
-  // A member adding only where it's cut is cut here by the full shape of each region cutting it.
+  // A member adding only where it's cut is cut here by each region cutting it: its clip-path or its full mask.
   const wrapInCuts = (node: RenderNode, content: React.ReactElement) =>
     membership(node, region)?.onlyWhereCut
-      ? [...new Set(fillCuts(node))]
-          .filter((name) => name !== region)
-          .reduce((inner, name) => {
-            const form = forms.get(name)?.full;
-            const attributes = form?.clipId ? { clipPath: `url(#${form.clipId})` } : form?.maskId ? { mask: `url(#${form.maskId})` } : undefined;
+      ? fillCutRefs(node)
+          .filter((cut, index, all) => cut.region !== region && all.findIndex((other) => other.region === cut.region) === index)
+          .reduce((inner, { region: name, mode }) => {
+            const form = forms.get(name);
+            const clipId = mode === "clip" ? form?.clipId : undefined;
+            const attributes = clipId ? { clipPath: `url(#${clipId})` } : form?.fullMaskId ? { mask: `url(#${form.fullMaskId})` } : undefined;
             return attributes ? (
               <g key={`${node.id}_cut_${name}`} {...attributes}>
                 {inner}
@@ -106,8 +107,8 @@ const SvgMask: React.FC<MaskProps> = ({ id, region, shape, nodes, forms }) => {
   const renderMember = (node: RenderNode) => {
     const member = membership(node, region);
     // The outline ring keeps its own black-fill/white-stroke colouring: an add or subtract fill would break it.
-    const mode =
-      shape === "outline" ? "outline_mask" : shape === "inset" && member?.inset && isStroked(node) ? "mask_no_outline" : "mask";
+    // In the inset shape, every stroked member's outline has its inner half cut out (maskedBy keeps outlines in place).
+    const mode = shape === "outline" ? "outline_mask" : shape === "inset" && isStroked(node) ? "mask_no_outline" : "mask";
     const maskFill = shape === "outline" ? undefined : member?.subtract ? "black" : "white";
     // Outset: a stroke in the fill color, 2x wide, grows the shape by `outset` on every side.
     const outset = shape === "outline" ? 0 : (member?.outset ?? 0);

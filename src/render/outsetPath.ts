@@ -34,6 +34,9 @@ export const outsetPathData = (d: string, amount: number = CLIP_OUTSET): string 
   try {
     ensureSetup();
     const src = new paper.CompoundPath(d);
+    // PaperOffset grows a clockwise outline and shrinks a counter-clockwise one, so make outer outlines clockwise
+    // (holes counter-clockwise, so they shrink) whichever way the path was drawn.
+    src.reorient(false, true);
     const result = PaperOffset.offset(src, amount, { join: "round" });
     if (result) {
       out = result.pathData || d;

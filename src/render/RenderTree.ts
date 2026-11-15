@@ -9,7 +9,7 @@ import type { RenderGroup } from "../types/RenderGroup";
 import { createOutlineNode } from "./outline";
 import { createRig, solvePose, type Pose, type PoseSolution, type Rig } from "./pose";
 import { resolveRegions, type RegionCut, type RegionMember } from "./regions";
-import type { RegionJoin } from "../types/Node";
+import type { RegionCutRef, RegionJoin } from "../types/Node";
 
 export type RenderNode = {
   id: string;
@@ -84,7 +84,7 @@ type RenderOptions = {
   opacity?: number;
   /** Region joins and cuts passed down by ancestors (`joinsForChildren`, `cutsForChildren`). */
   parentJoins?: RegionJoin[];
-  parentCuts?: string[];
+  parentCuts?: RegionCutRef[];
 };
 
 /** The solved pose, and the rig entry the walk is at: the walk visits nodes in rig entry order. */

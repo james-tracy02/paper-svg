@@ -164,7 +164,7 @@ describe("setPose", () => {
     const rect = (fill: string) => new SpriteBuilder().setShape("rect").setFill(fill).setStroke("#000000").setStrokeWidth(1).build();
     const open = (p: Pose) => (p.values?.open ?? 1) > 0.5;
     // Two versions of an eye, one shown at a time: the open one is a region member that cuts the iris (as a
-    // clip-path) and the lens (as a mask, through its inset), and the closed one carries a child that hides with it.
+    // clip-path) and the lens (as a mask), and the closed one carries a child that hides with it.
     const body = new NodeBuilder("root")
       .setSprite(rect("#888888"))
       .addAttachments(
@@ -172,10 +172,10 @@ describe("setPose", () => {
           .setSprite(rect("#ffffff"))
           .addDriver((p) => ({ visible: open(p) }))
           .addToRegion("eye")
-          .addToRegion("eye_inset", { inset: true })
+          .addToRegion("eye_inset")
           .build(),
-        new NodeBuilder("iris").setSprite(rect("#3366aa")).setZIndex(1).cutBy("eye").build(),
-        new NodeBuilder("lens").setSprite(rect("#66aa33")).setZIndex(2).cutBy("eye_inset").build(),
+        new NodeBuilder("iris").setSprite(rect("#3366aa")).setZIndex(1).clippedBy("eye").build(),
+        new NodeBuilder("lens").setSprite(rect("#66aa33")).setZIndex(2).maskedBy("eye_inset").build(),
         new NodeBuilder("eye_closed")
           .setSprite(rect("#aa6633"))
           .addDriver((p) => ({ visible: !open(p) }))
