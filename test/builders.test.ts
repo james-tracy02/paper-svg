@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSprite, NodeBuilder, registerCustomSprite, SpriteBuilder, unregisterCustomSprite, type CustomSprite } from "../src";
+import { getPatternTile, getSprite, NodeBuilder, registerCustomSprite, SpriteBuilder, unregisterCustomSprite, type CustomSprite } from "../src";
 
 const customSprite = (id: string, colors: number): CustomSprite => ({
   id,
@@ -140,5 +140,55 @@ describe("SpriteBuilder", () => {
     base.setFill("#222");
 
     expect(base.build().fill).toBe("#111");
+  });
+});
+
+describe("pattern repeat", () => {
+  const tile = (repeat?: [number, number]) => {
+    const base = new SpriteBuilder();
+    const sprite = (repeat ? base.setPatternRepeat(...repeat) : base).build();
+    return getPatternTile({ ...sprite, customSprite: { ...customSprite("tile", 1), size: { width: 50, height: 60 } } });
+  };
+
+  it("tiles every sprite size, once, without a repeat", () => {
+    expect(tile()).toEqual({ width: 50, height: 60, offsets: [{ x: 0, y: 0 }] });
+  });
+
+  it("tiles every repeat and draws the neighbors that reach into the tile, top row first, left to right", () => {
+    const { width, height, offsets } = tile([40, 50]);
+    expect({ width, height }).toEqual({ width: 40, height: 50 });
+    expect(offsets).toEqual([
+      { x: -40, y: -50 }, { x: 0, y: -50 }, { x: 40, y: -50 },
+      { x: -40, y: 0 }, { x: 0, y: 0 }, { x: 40, y: 0 },
+      { x: -40, y: 50 }, { x: 0, y: 50 }, { x: 40, y: 50 },
+    ]);
+  });
+
+  it("ignores a repeat that isn't positive", () => {
+    expect(new SpriteBuilder().setPatternRepeat(0, 10).build().patternRepeat).toBeUndefined();
+  });
+});
+
+describe("uniteElements", () => {
+  const square = (x: number) => `M${x},0 L${x + 10},0 L${x + 10},10 L${x},10 Z`;
+  const sprite: CustomSprite = {
+    ...customSprite("overlapping", 2),
+    elements: [
+      { d: square(0), colorKey: "color0" },
+      { d: square(5), colorKey: "color1" },
+    ],
+  };
+
+  it("draws overlapping elements as one uncolored path under its own id", () => {
+    const built = new SpriteBuilder().setCustomSprite(sprite).uniteElements().build();
+    expect(built.customSprite?.id).toBe("overlapping#united");
+    expect(built.customSprite?.elements).toHaveLength(1);
+    expect(built.customSprite?.elements[0].colorKey).toBeUndefined();
+  });
+
+  it("keeps the separate elements otherwise", () => {
+    const built = new SpriteBuilder().setCustomSprite(sprite).build();
+    expect(built.customSprite?.id).toBe("overlapping");
+    expect(built.customSprite?.elements).toHaveLength(2);
   });
 });

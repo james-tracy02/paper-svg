@@ -106,7 +106,7 @@ describe("drivers", () => {
 
     it("gives poses in one band the same draw order, so only a band change re-plans", () => {
       const rig = createRig(forearm(raised));
-      const key = (rotation: number) => solvePose(rig, { rotations: { forearm: rotation } }).zKey;
+      const key = (rotation: number) => solvePose(rig, { rotations: { forearm: rotation } }).layoutKey;
       expect(key(10)).toEqual(key(140));
       expect(key(160)).toEqual(key(170));
       expect(key(160)).not.toEqual(key(140));
@@ -217,6 +217,92 @@ describe("drivers", () => {
       expect(outline!.scale.y).toBeCloseTo(fill!.scale.y * 0.999);
       expect(at(5)).toEqual([undefined, undefined]);
     });
+  });
+
+  describe("sprites", () => {
+    const shape = (key: string, x: number, sx: number) =>
+      new SpriteBuilder().setShape(key === "front" ? "ellipse" : "rect").setOffset(x, -4).setScale(sx, 2).setRotation(3).setFill("#ff0000").setStroke("black").setStrokeWidth(1);
+    const side = shape("side", -2, 1.4).build();
+    const front = shape("front", 1.5, 1.1).build();
+    // Stands in for project-k's forearm: seen from the front past 90°, with a hand and its own outline.
+    const forearm = (configure: (b: NodeBuilder) => NodeBuilder, s: "left" | "right") =>
+      part("torso")
+        .addJoints(configure(new NodeBuilder("forearm").setOutlineZIndex(5).moveBy(10, 0).addJoints(part("hand").build())).buildSide(s))
+        .build();
+    const driven = (s: "left" | "right") =>
+      forearm((b) => b.setSprite(side).addDriver((p) => ({ sprite: (p.rotations?.angle ?? 0) > 90 ? front : undefined })), s);
+    const fieldsOf = (nodes: RenderNode[]) => nodes.map(({ parent, jointParent, linkedOutline, ...rest }) => rest);
+
+    it.each(["right", "left"] as const)("draw the node as building it with that sprite would, outline included (%s side)", (s) => {
+      for (const angle of [30, 120]) {
+        const baked = forearm((b) => b.setSprite(angle > 90 ? front : side), s);
+        expect(fieldsOf(getRenderNodes(driven(s), { rotations: { angle } }))).toEqual(fieldsOf(getRenderNodes(baked, { rotations: { angle } })));
+        expect(fieldsOf(getRenderNodes(bakePose(driven(s), { rotations: { angle } })))).toEqual(fieldsOf(getRenderNodes(baked)));
+      }
+    });
+
+    it("re-plan only when the sprite chosen changes", () => {
+      const rig = createRig(driven("left"));
+      const key = (angle: number) => solvePose(rig, { rotations: { angle } }).layoutKey;
+      expect(key(10)).toEqual(key(80));
+      expect(key(100)).toEqual(key(170));
+      expect(key(100)).not.toEqual(key(80));
+    });
+  });
+
+  describe("cuts", () => {
+    // Stands in for project-k's arm occlusion: tucked behind past 90°, the forearm and its hand are clipped
+    // to the region a backdrop draws.
+    const body = (configure: (b: NodeBuilder) => NodeBuilder) =>
+      part("torso")
+        .addJoints(
+          part("backdrop").addToRegion("occlusion").build(),
+          configure(part("forearm").moveBy(10, 0).cutsForChildren()).addJoints(part("hand").build()).build(),
+        )
+        .build();
+    const driven = body((b) =>
+      b.addDriver((p) => ({ cuts: (p.rotations?.angle ?? 0) > 90 ? [{ region: "occlusion", mode: "clip" as const }] : undefined })),
+    );
+    const cutsOf = (nodes: RenderNode[]) => Object.fromEntries(nodes.map((n) => [n.id, n.cuts]));
+
+    it("cut the node and the children it passes cuts to, as clippedBy would", () => {
+      const clipped = body((b) => b.clippedBy("occlusion"));
+      const pose: Pose = { rotations: { angle: 120 } };
+      expect(cutsOf(getRenderNodes(driven, pose))).toEqual(cutsOf(getRenderNodes(clipped, pose)));
+      expect(cutsOf(getRenderNodes(driven, pose)).hand).toEqual([{ region: "occlusion", mode: "clip", fill: true, outline: false }]);
+      expect(cutsOf(getRenderNodes(driven, { rotations: { angle: 30 } }))).toEqual(cutsOf(getRenderNodes(body((b) => b))));
+      expect(cutsOf(getRenderNodes(bakePose(driven, pose)))).toEqual(cutsOf(getRenderNodes(clipped)));
+    });
+
+    it("re-plan only when the cuts change", () => {
+      const rig = createRig(driven);
+      const key = (angle: number) => solvePose(rig, { rotations: { angle } }).layoutKey;
+      expect(key(10)).toEqual(key(80));
+      expect(key(100)).toEqual(key(170));
+      expect(key(100)).not.toEqual(key(80));
+    });
+  });
+
+  it.each(["right", "left"] as const)("move an aim's from point, as building it with that point would (%s side)", (s) => {
+    const sleeve = (configure: (b: NodeBuilder) => NodeBuilder) =>
+      part("torso")
+        .addJoints(
+          part("forearm").moveBy(10, 0).buildSide(s),
+          configure(part("sleeve").moveBy(4, 2)).buildSide(s),
+        )
+        .build();
+    const from = (angle: number) => (angle > 90 ? { x: 3, y: -30 } : { x: -1, y: -40 });
+    const driven = sleeve((b) =>
+      b.setAimAt(`forearm_${s}`, { x: 0, y: -120 }, from(0)).addDriver((p) => ({ aimFrom: from(p.rotations?.[`forearm_${s}`] ?? 0) })),
+    );
+    for (const angle of [30, 120]) {
+      const pose: Pose = { rotations: { [`forearm_${s}`]: angle } };
+      const baked = sleeve((b) => b.setAimAt(`forearm_${s}`, { x: 0, y: -120 }, from(angle)));
+      expect(placement(getRenderNodes(driven, pose))).toEqual(placement(getRenderNodes(baked, pose)));
+    }
+    const at = (angle: number) => placement(getRenderNodes(driven, { rotations: { [`forearm_${s}`]: angle } }))[`sleeve_${s}`];
+    const unmoved = placement(getRenderNodes(sleeve((b) => b.setAimAt(`forearm_${s}`, { x: 0, y: -120 }, from(0))), { rotations: { [`forearm_${s}`]: 120 } }))[`sleeve_${s}`];
+    expect(at(120)).not.toEqual(unmoved);
   });
 
   it("bake into a plain tree that draws what the pose draws", () => {

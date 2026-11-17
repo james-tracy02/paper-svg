@@ -96,6 +96,10 @@ const scenarios = {
     prepare: (n) => window.bench.prepareBodies(n, "forearm_right"),
     run: (i) => window.bench.pose(i),
   },
+  "rebuilt body, nothing changed": {
+    prepare: (n) => window.bench.prepareBodies(n, "forearm_right", 0),
+    run: (i) => window.bench.pose(i),
+  },
   "pose change (rotate a forearm, pose prop)": {
     prepare: () => window.bench.resetPose(),
     run: (i) => window.bench.posePose(i, ["forearm_right"]),

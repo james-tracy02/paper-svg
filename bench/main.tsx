@@ -77,9 +77,10 @@ const bench = {
   ready: false,
   nodeCount: getRenderNodes(fixture.body).length,
   /** Bodies for `pose`, built up front so building them isn't measured. */
-  prepareBodies(count: number, id: string) {
+  /** Rebuilt bodies, each with `id` turned `degrees` further (0: rebuilt with nothing changed). */
+  prepareBodies(count: number, id: string, degrees = 1) {
     let body = fixture.body;
-    bench.bodies = Array.from({ length: count }, () => (body = rebuildWithRotation(body, id, 1)));
+    bench.bodies = Array.from({ length: count }, () => (body = rebuildWithRotation(body, id, degrees)));
   },
   bodies: [] as Node[],
   pose: (index: number) => update((state) => ({ ...state, body: bench.bodies[index] })),

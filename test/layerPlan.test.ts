@@ -166,6 +166,29 @@ describe("planLayers paint order", () => {
     });
   });
 
+  it("paints a nested render group as one block inside its parent, where its last member is among the parent's", () => {
+    const body = root(
+      part("frame", 1).addToRegion("hard").build(),
+      part("p1", 2).setRenderGroup("outer").build(),
+      part("a", 3).clippedBy("hard").setRenderGroup("inner", "outer").build(),
+      part("p2", 4).setRenderGroup("outer").build(),
+      part("b", 5).clippedBy("hard").setRenderGroup("inner", "outer").build(),
+      part("p3", 6).setRenderGroup("outer").build(),
+      part("c", 7).build(),
+    );
+    const { items } = plan(body, { outer: { clip: "hard" }, inner: { clip: "hard", opacity: 0.5 } });
+
+    expect(paintOrder(items)).toEqual([
+      "frame",
+      { "group outer": ["p1", "p2", { "group inner": ["a", "b"] }, "p3"] },
+      "c",
+    ]);
+    const outer = items.find((item) => item.kind === "renderGroup");
+    const inner = outer?.kind === "renderGroup" ? outer.items.find((item) => item.kind === "renderGroup") : undefined;
+    // The parent's clip already covers the nested group, so it isn't applied twice.
+    expect(inner?.kind === "renderGroup" && inner.group).toEqual({ id: "inner", opacity: 0.5, wrappers: [], blendMode: "normal" });
+  });
+
   it("paints a mask outline after its clip owner's outline when that outline is at or above it", () => {
     const body = root(
       part("torso", 1, true).addToRegion("hard").build(),

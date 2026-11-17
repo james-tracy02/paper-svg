@@ -1,5 +1,7 @@
 import type { Pose } from "./Pose";
 import type { CustomSprite, Sprite } from "./Sprite";
+import type { RegionCutRef } from "./Node";
+import type { Vector2 } from "./primitives";
 
 /**
  * What a driver does to its node for the current pose. Each field combines with the node's own
@@ -21,6 +23,16 @@ import type { CustomSprite, Sprite } from "./Sprite";
  * `mask` replaces the node's own mask (`setMask`) for this pose, for masks that follow a joint; `null`
  * removes it. Like `setMask`, it is in the node's space and `buildLeft` mirrors it. Return the same
  * object while the mask is unchanged: a new one redraws the node.
+ *
+ * `sprite` replaces the node's whole sprite for this pose, its transform and paint included, for a
+ * part drawn with a different sprite in some poses (a limb seen from another side). `buildLeft` mirrors
+ * it as it mirrors the node's own; `path` and `customSprite` apply on top of it. Like a z change it
+ * re-plans the layers, so return one of a few sprites, the same object while the choice is unchanged.
+ *
+ * `cuts` adds region cuts (as `clippedBy`/`maskedBy` do) for this pose, passed down to children like
+ * the node's own when it sets `cutsForChildren`. It re-plans the layers too: keep it to steps.
+ *
+ * `aimFrom` replaces the `from` point of the node's `setAimAt` for this pose; `buildLeft` mirrors it.
  */
 export type DriverOutput = {
   rotate?: number;
@@ -36,6 +48,9 @@ export type DriverOutput = {
   path?: string;
   customSprite?: CustomSprite;
   mask?: Sprite | null;
+  sprite?: Sprite;
+  cuts?: RegionCutRef[];
+  aimFrom?: Vector2;
 };
 
 /**

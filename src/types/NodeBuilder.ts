@@ -41,6 +41,7 @@ interface BuilderState {
   stopInheritedRegions?: boolean;
   stopInheritedCuts?: boolean;
   outlineZIndex?: number;
+  outlineZIndexMode?: "relative" | "absolute";
   pointerEvents?: boolean;
   pointerEventsTarget?: string;
   blendMode?: CSSProperties["mixBlendMode"];
@@ -139,7 +140,6 @@ export default class NodeBuilder {
   setFixedScale(enabled: boolean = true): NodeBuilder {
     return this.with({ fixedScale: enabled });
   }
-
   /** Patterns on this node and its descendants tile in this node's frame, turned and moved (see `Node.patternSpace`). */
   setPatternSpace({ rotation = 0, x = 0, y = 0 }: { rotation?: number; x?: number; y?: number } = {}): NodeBuilder {
     return this.with({ patternSpace: { rotation, offset: { x, y } } });
@@ -349,13 +349,14 @@ export default class NodeBuilder {
     return this.with({ stopInheritedCuts: enabled || undefined });
   }
 
-  setOutlineZIndex(zIndex: number): NodeBuilder {
-    return this.with({ outlineZIndex: zIndex });
+  /** Draws the stroke as its own layer at `zIndex`; "relative" adds it to the node's own resolved z-index. */
+  setOutlineZIndex(zIndex: number, mode?: "relative" | "absolute"): NodeBuilder {
+    return this.with({ outlineZIndex: zIndex, outlineZIndexMode: mode });
   }
 
-  setOutlineZIndexIf(c: boolean, zIndex: number): NodeBuilder {
+  setOutlineZIndexIf(c: boolean, zIndex: number, mode?: "relative" | "absolute"): NodeBuilder {
     if (c) {
-      return this.setOutlineZIndex(zIndex);
+      return this.setOutlineZIndex(zIndex, mode);
     }
     return this;
   }
@@ -381,9 +382,11 @@ export default class NodeBuilder {
     return this.with({ opacity });
   }
 
-  setRenderGroup(id: string | undefined): NodeBuilder {
+  /** Joins render group `id`; with `parent`, a group nested in that one (see `RenderGroup.parent`). */
+  setRenderGroup(id: string | undefined, parent?: RenderGroup | string): NodeBuilder {
     if (!id) return this;
-    return this.with({ renderGroup: { id } });
+    const outer = typeof parent === "string" ? { id: parent } : parent;
+    return this.with({ renderGroup: outer ? { id, parent: outer } : { id } });
   }
 
   setDebugColor(color: string | undefined): NodeBuilder {
@@ -460,6 +463,7 @@ export default class NodeBuilder {
       }),
       outline: definedOnly({
         zIndex: s.outlineZIndex,
+        zIndexMode: s.outlineZIndex === undefined ? undefined : s.outlineZIndexMode,
         trace: s.traceOutline ? (s.traceRegions.length ? s.traceRegions : true) : undefined,
       }),
       interaction: definedOnly({

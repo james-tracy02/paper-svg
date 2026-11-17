@@ -88,13 +88,13 @@ describe("posing a layout", () => {
       )
       .build();
 
-    // As useRenderNodes runs it: one rig and poser; a new layout, replacing the last, only when `zKey` changes.
+    // As useRenderNodes runs it: one rig and poser; a new layout, replacing the last, only when `layoutKey` changes.
     const rig = createRig(body);
     const poser = createRigPoser();
     let layout = createRigLayout(rig, solvePose(rig));
     const frame = (pose: Pose) => {
       const solution = solvePose(rig, pose);
-      if (solution.zKey !== layout.zKey) layout = createRigLayout(rig, solution, layout);
+      if (solution.layoutKey !== layout.layoutKey) layout = createRigLayout(rig, solution, layout);
       return poser(layout, solution);
     };
 
@@ -114,6 +114,52 @@ describe("posing a layout", () => {
     const lowerAgain = frame(back);
     expect(fields(lowerAgain.visibleNodes)).toEqual(fields(rebuilt(body, back).visibleNodes));
     expect(at(lowerAgain, "hem")!.sprite.dynamicPath).toBe(hemPath(0.9));
+  });
+
+  it("re-lays out when a driver swaps a sprite or adds cuts, keeps what neither touches, and matches a rebuild", () => {
+    const sprite = (shape: "rect" | "ellipse", x: number) =>
+      new SpriteBuilder().setShape(shape).setOffset(x, -3).setStroke("black").setStrokeWidth(1).build();
+    const side = sprite("rect", -2);
+    const front = sprite("ellipse", 1.5);
+    const tucked = (p: Pose) => (p.rotations?.forearm ?? 0) > 90;
+    const body = part("torso")
+      .addJoints(
+        part("backdrop").addToRegion("occlusion").build(),
+        new NodeBuilder("forearm")
+          .setSprite(side)
+          .setOutlineZIndex(5)
+          .cutsForChildren()
+          .addDriver((p) => (tucked(p) ? { sprite: front, cuts: [{ region: "occlusion", mode: "clip" }] } : {}))
+          .addJoints(part("hand").build())
+          .buildRight(),
+        part("head").moveBy(0, -30).build(),
+      )
+      .build();
+
+    const rig = createRig(body);
+    const poser = createRigPoser();
+    let layout = createRigLayout(rig, solvePose(rig));
+    const frame = (pose: Pose) => {
+      const solution = solvePose(rig, pose);
+      if (solution.layoutKey !== layout.layoutKey) layout = createRigLayout(rig, solution, layout);
+      return poser(layout, solution);
+    };
+    const at = (posed: ReturnType<typeof frame>, id: string) => posed.visibleNodes.find((n) => n.id === id);
+
+    const straight = frame({ rotations: { forearm: 30 } });
+    const first = layout;
+    const pose: Pose = { rotations: { forearm: 120 } };
+    const bent = frame(pose);
+    expect(layout).not.toBe(first);
+    expect(fields(bent.visibleNodes)).toEqual(fields(rebuilt(body, pose).visibleNodes));
+    expect(at(bent, "forearm_right")!.sprite.shape).toBe("ellipse");
+    expect(at(bent, "hand")!.cuts).toEqual([{ region: "occlusion", mode: "clip", fill: true, outline: false }]);
+    expect(at(bent, "head")).toBe(at(straight, "head"));
+
+    const back: Pose = { rotations: { forearm: 10 } };
+    const again = frame(back);
+    expect(fields(again.visibleNodes)).toEqual(fields(rebuilt(body, back).visibleNodes));
+    expect(at(again, "hand")!.cuts).toBeUndefined();
   });
 
   it("maps a layout's nodes to their posed versions", () => {

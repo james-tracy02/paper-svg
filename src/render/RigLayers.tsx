@@ -1,4 +1,4 @@
-import { Fragment, memo, useLayoutEffect, useMemo, type ReactNode } from "react";
+import { Fragment, memo, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Node } from "../types/Node";
 import type { Color } from "../types/primitives";
 import type { RenderGroupOptions } from "../types/RenderGroup";
@@ -15,6 +15,25 @@ import { planLayers, resolveVisibleNodes, type PaintItem, type RegionDef, type R
 import { getPosedRig } from "./useRenderNodes";
 import { PoseBindingsContext } from "./poseBindings";
 import type { LivePoser } from "./livePose";
+
+/** Whether two plans define the same forms: the same regions, each with the same definition ids. */
+const sameForms = (a: RegionForms, b: RegionForms) => {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [name, form] of a) {
+    const other = b.get(name);
+    if (
+      !other ||
+      form.clipId !== other.clipId ||
+      form.maskId !== other.maskId ||
+      form.fullMaskId !== other.fullMaskId ||
+      form.outlineMaskId !== other.outlineMaskId
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
 
 /** Overrides how one node responds to the pointer. */
 export type RigNodeInteraction = {
@@ -107,6 +126,16 @@ const RigLayers: React.FC<RigLayersProps> = ({
     () => planLayers({ nodes: planNodes, visibleNodes, getRenderGroupOptions, scopeId }),
     [planNodes, visibleNodes, getRenderGroupOptions, scopeId],
   );
+  // Every group reads the forms from context: a new plan that defines the same ones (a relayout for a new
+  // draw order, say) keeps the last map, so groups whose nodes kept their identity skip the render.
+  const lastForms = useRef<RegionForms>(undefined);
+  const forms = useMemo(() => {
+    const last = lastForms.current;
+    return last && sameForms(last, plan.defs.forms) ? last : plan.defs.forms;
+  }, [plan]);
+  useLayoutEffect(() => {
+    lastForms.current = forms;
+  }, [forms]);
   const clipDefs = useMemo(
     () => (posed ? plan.defs.clips.map((def) => ({ ...def, nodes: def.nodes.map(current) })) : plan.defs.clips),
     [plan, posed, current],
@@ -144,7 +173,7 @@ const RigLayers: React.FC<RigLayersProps> = ({
 
   // Traced outlines sharing their outline masks are masked once per run: each mask is a layer of its own.
   const renderMaskOutlines = (planned: RenderNode[]) =>
-    maskOutlineRuns(planned, plan.defs.forms).map(({ masks, nodes: run }) => {
+    maskOutlineRuns(planned, forms).map(({ masks, nodes: run }) => {
       if (run.length === 1 || !masks.length) return run.map((node) => renderNode(node, "maskOutline"));
       const key = `mask_outlines_${run[0].id}`;
       return masks.reduceRight<ReactNode>(
@@ -190,9 +219,9 @@ const RigLayers: React.FC<RigLayersProps> = ({
   return (
     <PoseBindingsContext.Provider value={livePose?.bindings ?? null}>
       <HoistedDefsProvider>
-        <RegionFormsContext.Provider value={plan.defs.forms}>
+        <RegionFormsContext.Provider value={forms}>
           <SpriteDefs body={body} nodes={posed?.nodes} />
-          {renderMaskDefs(plan.defs.masks, plan.defs.forms, current)}
+          {renderMaskDefs(plan.defs.masks, forms, current)}
           <ClipPathDefs defs={clipDefs} />
           {outerOutline
             ? plan.outerOutlines.map(current).map((g) => (

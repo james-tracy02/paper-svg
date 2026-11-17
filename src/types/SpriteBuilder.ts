@@ -1,6 +1,7 @@
 import type { Color } from "./primitives";
 import { getSprite } from "../sprites/loader";
 import { outsetPathData } from "../render/outsetPath";
+import { uniteClipElements } from "../render/unitePaths";
 import type { Shape, Sprite, CustomSprite, SpriteGradient } from "./Sprite";
 import type { ColorDerive } from "./ColorSlot";
 
@@ -32,6 +33,7 @@ interface BuilderState {
   inheritStrokeColors: Record<number, boolean>;
   pattern?: Sprite;
   patternFills: Record<number, Sprite>;
+  patternRepeat?: { width: number; height: number };
   dynamicPath?: string;
   href?: string;
   shadowColorIndex?: number;
@@ -46,6 +48,7 @@ interface BuilderState {
   maskScaleY: number;
   outsets: Record<number, number>;
   clipPathIndices?: number[];
+  unite?: boolean;
 }
 
 const getKey = (index: number, prefix: string = "color"): string => {
@@ -392,6 +395,17 @@ export default class SpriteBuilder {
     return this.with({ defaultDerives });
   }
 
+  /**
+   * As a pattern tile, repeats every `width` x `height` (custom sprite units) instead of every sprite size.
+   * Smaller than the sprite, neighboring repeats overlap, closing gaps where the drawing doesn't fill its bounds;
+   * later repeats (right, then down) draw over earlier ones. `height` defaults to `width`; undefined resets.
+   */
+  setPatternRepeat(width?: number, height: number | undefined = width): SpriteBuilder {
+    const valid = (n?: number): n is number => n !== undefined && Number.isFinite(n) && n > 0;
+    if (!valid(width) || !valid(height)) return this.with({ patternRepeat: undefined });
+    return this.with({ patternRepeat: { width, height } });
+  }
+
   setLineCap(lineCap: "butt" | "round" | "square"): SpriteBuilder {
     return this.with({ lineCap });
   }
@@ -446,6 +460,15 @@ export default class SpriteBuilder {
     return this.with({ clipPathIndices: [...existing, normalized] });
   }
 
+  /**
+   * Draws the custom sprite's filled elements as one path, their union, so overlapping pieces cover each area once:
+   * a translucent copy (a shadow, say) doesn't darken where pieces overlap. The united path takes the sprite's
+   * fill; stroke-only elements are dropped. Falls back to the separate elements if the union fails.
+   */
+  uniteElements(unite: boolean = true): SpriteBuilder {
+    return this.with({ unite });
+  }
+
   private _build(): Sprite {
     const s = this._state;
     const inheritStrokeColors = Object.keys(s.inheritStrokeColors).reduce<Record<string, boolean>>((map, slot) => {
@@ -465,19 +488,24 @@ export default class SpriteBuilder {
     const hasInheritedSlots = Object.keys(inheritSlots).length > 0;
     const requiredColors = s.customSprite?.colors ?? 0;
     const paddedColors = padColors(s.colors, requiredColors);
+    const elements = s.customSprite?.elements.map((el, index) => {
+      const outset = s.outsets[index];
+      if (!outset || !el.d) {
+        return { ...el };
+      }
+      return {
+        ...el,
+        d: outsetPathData(el.d, outset),
+      };
+    });
+    // Without outsets the registered elements are unchanged, so unite those: the union is cached by that array.
+    const outset = Object.keys(s.outsets).length > 0;
+    const united = s.unite && elements ? uniteClipElements(outset ? elements : s.customSprite!.elements) : null;
     const customSprite = s.customSprite
       ? {
           ...s.customSprite,
-          elements: s.customSprite.elements.map((el, index) => {
-            const outset = s.outsets[index];
-            if (!outset || !el.d) {
-              return { ...el };
-            }
-            return {
-              ...el,
-              d: outsetPathData(el.d, outset),
-            };
-          }),
+          // Its own id, so caches keyed by sprite signature don't mistake it for the separate elements.
+          ...(united ? { id: `${s.customSprite.id}#united`, elements: [{ d: united }] } : { elements: elements! }),
         }
       : undefined;
 
@@ -525,6 +553,7 @@ export default class SpriteBuilder {
       opacity: s.opacity,
       pattern: s.pattern,
       patternFills: Object.keys(s.patternFills).length ? { ...s.patternFills } : undefined,
+      patternRepeat: s.patternRepeat,
       dynamicPath: s.dynamicPath && s.outsets[0] ? outsetPathData(s.dynamicPath, s.outsets[0]) : s.dynamicPath,
       href: s.href,
       lineCap: s.lineCap,

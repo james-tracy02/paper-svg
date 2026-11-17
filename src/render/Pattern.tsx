@@ -60,10 +60,38 @@ const getPatternTransform = (sprite: Sprite, target: RenderNode) => {
   return patternTransformParts.length ? patternTransformParts.join(" ") : undefined;
 };
 
+// Room past the sprite's bounds for strokes, so a copy whose outline still reaches the tile is drawn.
+const STROKE_ROOM = 2;
+
+/** How many repeats a sprite `size` long reaches past its own when repeating every `repeat`. */
+const reach = (size: number, repeat: number) => Math.max(0, Math.ceil(((size + STROKE_ROOM) / repeat - 1) / 2 - 1e-9));
+
+/**
+ * A pattern tile for `sprite`: the tile's size (its `patternRepeat`, else the custom sprite's size) and where to
+ * draw the sprite inside it, relative to the tile's center. Without an overlapping repeat that is just the center;
+ * with one, every neighboring repeat that reaches into the tile too, top row first and left to right, so later
+ * repeats draw over earlier ones the same way in every tile.
+ */
+export const getPatternTile = (sprite: Sprite) => {
+  const spriteWidth = sprite.customSprite?.size?.width ?? BASE_SIZE;
+  const spriteHeight = sprite.customSprite?.size?.height ?? BASE_SIZE;
+  const width = sprite.patternRepeat?.width ?? spriteWidth;
+  const height = sprite.patternRepeat?.height ?? spriteHeight;
+  const reachX = sprite.patternRepeat ? reach(spriteWidth, width) : 0;
+  const reachY = sprite.patternRepeat ? reach(spriteHeight, height) : 0;
+  const offsets: { x: number; y: number }[] = [];
+  // `0 -` rather than `-`, so no reach starts at 0 and not -0.
+  for (let ky = 0 - reachY; ky <= reachY; ky++) {
+    for (let kx = 0 - reachX; kx <= reachX; kx++) {
+      offsets.push({ x: kx * width, y: ky * height });
+    }
+  }
+  return { width, height, offsets };
+};
+
 const SvgSpritePattern: React.FC<PatternProps> = ({ id, sprite, target }) => {
   const bindings = useContext(PoseBindingsContext);
-  const intrinsicWidth = sprite.customSprite?.size?.width ?? BASE_SIZE;
-  const intrinsicHeight = sprite.customSprite?.size?.height ?? BASE_SIZE;
+  const { width: intrinsicWidth, height: intrinsicHeight, offsets } = getPatternTile(sprite);
   const patternTransform = getPatternTransform(sprite, target);
   const bindTransform = bindPose<Element>(bindings, target.id, (element) => (get) => {
     const posed = get(target.id);
@@ -84,14 +112,16 @@ const SvgSpritePattern: React.FC<PatternProps> = ({ id, sprite, target }) => {
       patternTransform={patternTransform}
     >
       {/* Tile content is positioned from the tile's own corner, so center the sprite within it */}
-      <SvgSprite
-        key={id}
-        id={id}
-        sprite={sprite}
-        mode="pattern"
-        disableSymbols
-        baseTransform={`translate(${intrinsicWidth / 2}, ${intrinsicHeight / 2})`}
-      />
+      {offsets.map(({ x, y }, index) => (
+        <SvgSprite
+          key={`${id}_${index}`}
+          id={offsets.length > 1 ? `${id}_${index}` : id}
+          sprite={sprite}
+          mode="pattern"
+          disableSymbols
+          baseTransform={`translate(${intrinsicWidth / 2 + x}, ${intrinsicHeight / 2 + y})`}
+        />
+      ))}
     </pattern>
   );
 };

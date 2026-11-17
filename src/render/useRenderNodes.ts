@@ -21,11 +21,11 @@ export const useRenderNodes = (body: Node, pose?: Pose) => {
   const lastLayout = useRef<RigLayout>(undefined);
   const rig = useMemo(() => createRig(body), [body]);
   const solution = useMemo(() => solvePose(rig, pose), [rig, pose]);
-  // The layout only depends on the solution's draw order, which `zKey` stands for. It replaces the last
-  // one, so nodes the new draw order leaves in place keep their identity.
+  // The layout only depends on the solution's draw order, driven sprites and driven cuts, which `layoutKey`
+  // stands for. It replaces the last one, so nodes the new layout leaves alike keep their identity.
   const layout = useMemo(
     () => (lastLayout.current = createRigLayout(rig, solution, lastLayout.current)),
-    [rig, solution.zKey],
+    [rig, solution.layoutKey],
   );
   return useMemo(() => {
     const posed = poser(layout, solution);

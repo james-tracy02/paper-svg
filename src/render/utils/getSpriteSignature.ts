@@ -32,7 +32,8 @@ export const getSpriteSignature = (sprite: Sprite): string => {
   const blurKey = sprite.blur ?? 0;
   const lineCapKey = sprite.lineCap ?? "";
   const patternKey = sprite.pattern ? `|pattern(${getSpriteSignature(sprite.pattern)})` : "";
+  const repeatKey = sprite.patternRepeat ? `|repeat(${r(sprite.patternRepeat.width)},${r(sprite.patternRepeat.height)})` : "";
   const colorsKey = serializeColorRecord(sprite.colors);
   const strokeColorsKey = serializeColorRecord(sprite.strokeColors);
-  return `${spriteKey}:${transformKey}:${fillKey}:${strokeKey}:${strokeWidthKey}:${opacityKey}:${blurKey}:${lineCapKey}:${colorsKey}:${strokeColorsKey}${patternKey}`;
+  return `${spriteKey}:${transformKey}:${fillKey}:${strokeKey}:${strokeWidthKey}:${opacityKey}:${blurKey}:${lineCapKey}:${colorsKey}:${strokeColorsKey}${repeatKey}${patternKey}`;
 };

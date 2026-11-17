@@ -21,6 +21,7 @@ export type {
 export type { Transform, Matrix2x2, MatrixTransform } from "./types/Transform";
 export { mirrorTransform } from "./types/Transform";
 export type { RenderGroup, RenderGroupOptions } from "./types/RenderGroup";
+export { renderGroupPath } from "./types/RenderGroup";
 export type { TransformState } from "./types/TransformState";
 export type { ColorSlot, ColorDerive, ColorTone } from "./types/ColorSlot";
 export { BASE_SLOT } from "./types/ColorSlot";
@@ -111,3 +112,4 @@ export { default as GlowFilter } from "./render/filters/GlowFilter";
 export { default as TintFilter } from "./render/filters/TintFilter";
 export { default as BlurFilter } from "./render/filters/BlurFilter";
 export { SPRITE_ROOT_STYLE, getZoomVars } from "./render/hooks/useSpriteVisuals";
+export { getPatternTile } from "./render/Pattern";

@@ -94,6 +94,14 @@ describe("hierarchy", () => {
     expect(nodes.get("root_outline")!.sprite.fill).toBe("none");
     expect(nodes.get("root")!.sprite.strokeWidth).toBe(0);
   });
+
+  it("places a relative outline z-index from the node's own resolved z-index", () => {
+    const child = new NodeBuilder("child").setSprite(stroked).setZIndex(2).setOutlineZIndex(-0.5, "relative").build();
+    const nodes = byId(new NodeBuilder("root").setZIndex(10, "absolute").addAttachments(child).build());
+
+    expect(nodes.get("child")!.zIndex).toBe(12);
+    expect(nodes.get("child_outline")!.zIndex).toBe(11.5);
+  });
 });
 
 describe("mask inheritance", () => {

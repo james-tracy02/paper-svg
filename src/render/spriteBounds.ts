@@ -10,6 +10,7 @@ import svgpath from "svgpath";
 import type { CustomSprite, Sprite } from "../types/Sprite";
 import type { MatrixTransform } from "../types/Transform";
 import type { RenderNode } from "./RenderTree";
+import { renderGroupPath } from "../types/RenderGroup";
 import { combineMatrixTransforms, spriteTransformToMatrix } from "./transform";
 
 export type Bounds = { x: number; y: number; width: number; height: number };
@@ -167,7 +168,9 @@ export const getRenderGroupBounds = (nodes: readonly RenderNode[], groupId: stri
   let bounds: Bounds | null = null;
   for (const node of nodes) {
     // An outline node draws its owner's shape again.
-    if (node.renderGroup?.id !== groupId || node.noSprite || node.hidden || node.outlineOf) continue;
+    if (node.noSprite || node.hidden || node.outlineOf) continue;
+    // Members of nested groups are members of their ancestors too.
+    if (!renderGroupPath(node.renderGroup).some((group) => group.id === groupId)) continue;
     const local = spriteLocalBounds(node.sprite, false);
     if (local) bounds = union(bounds, transformBounds(local.bounds, combineMatrixTransforms(node.matrix, local.space)));
   }

@@ -6,7 +6,7 @@
  * render nodes from a solved pose. Drivers (`NodeBuilder.addDriver`) are evaluated here, so values
  * that follow a joint move with the pose too.
  */
-import type { Node } from "../types/Node";
+import type { Node, RegionCutRef } from "../types/Node";
 import type { Pose } from "../types/Pose";
 import type { Vector2 } from "../types/primitives";
 import type { CustomSprite, Sprite } from "../types/Sprite";
@@ -63,16 +63,20 @@ export type PoseSolution = {
   customSprites: (CustomSprite | undefined)[];
   /** The mask a driver sets in place of an entry's own (`null`: none); undefined where no driver does. */
   masks: (Sprite | null | undefined)[];
+  /** The sprite a driver draws an entry with in place of its own; undefined where no driver does. */
+  sprites: (Sprite | undefined)[];
+  /** Region cuts drivers add to an entry's own. */
+  cuts: (RegionCutRef[] | undefined)[];
   /** Entries a driver hides (`visible: false`), directly or through an ancestor. */
   hidden: boolean[];
   /** What drivers add to each entry's z-index, and to its outline's. */
   zOffsets: number[];
   outlineZOffsets: number[];
   /**
-   * The same for every pose that gives each entry the same z offsets. Draw order follows z, so the
-   * layer plan only needs redoing when this changes.
+   * The same for every pose that gives each entry the same z offsets, driven sprites and driven cuts:
+   * what the layer plan is made from besides the tree. It only needs redoing when this changes.
    */
-  zKey: string;
+  layoutKey: string;
 };
 
 type PosedEntry = {
@@ -83,19 +87,24 @@ type PosedEntry = {
   path?: string;
   customSprite?: CustomSprite;
   mask?: Sprite | null;
+  sprite?: Sprite;
+  cuts?: RegionCutRef[];
 };
 
-/** Left-side copies of driver masks, mirrored as `buildLeft` mirrors a node's own, kept so a mask keeps its identity. */
-const mirroredMasks = new WeakMap<Sprite, Sprite>();
-const mirrorMask = (mask: Sprite): Sprite => {
-  let mirrored = mirroredMasks.get(mask);
+/**
+ * Left-side copies of driver masks and sprites, mirrored as `buildLeft` mirrors a node's own, kept so
+ * each keeps its identity.
+ */
+const mirroredSprites = new WeakMap<Sprite, Sprite>();
+const mirrorSprite = (mask: Sprite): Sprite => {
+  let mirrored = mirroredSprites.get(mask);
   if (!mirrored) {
     mirrored = {
       ...mask,
       translate: { x: mask.translate.x * -1, y: mask.translate.y },
       scale: { x: mask.scale.x * -1, y: mask.scale.y },
     };
-    mirroredMasks.set(mask, mirrored);
+    mirroredSprites.set(mask, mirrored);
   }
   return mirrored;
 };
@@ -128,6 +137,9 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
   let path: string | undefined;
   let customSprite: CustomSprite | undefined;
   let mask: Sprite | null | undefined;
+  let sprite: Sprite | undefined;
+  let cuts: RegionCutRef[] | undefined;
+  let aimFrom: Vector2 | undefined;
   for (const driver of node.drivers ?? []) {
     const out = driver.evaluate(pose);
     const m = driver.mirror;
@@ -143,21 +155,34 @@ const applyPose = (node: Node, pose: Pose): PosedEntry => {
     outlineZOffset += out.outlineZIndex ?? 0;
     path = out.path ?? path;
     customSprite = out.customSprite ?? customSprite;
-    if (out.mask !== undefined) mask = out.mask && m < 0 ? mirrorMask(out.mask) : out.mask;
+    if (out.mask !== undefined) mask = out.mask && m < 0 ? mirrorSprite(out.mask) : out.mask;
+    if (out.sprite) sprite = m < 0 ? mirrorSprite(out.sprite) : out.sprite;
+    if (out.cuts?.length) cuts = [...(cuts ?? []), ...out.cuts];
+    if (out.aimFrom) aimFrom = { x: out.aimFrom.x * m, y: out.aimFrom.y };
   }
   const skew = rest.skew || skewX || skewY ? { x: skewX, y: skewY } : undefined;
-  const sprite =
+  const drawn = sprite ?? node.sprite;
+  const posedSprite =
     path !== undefined || customSprite
-      ? { ...node.sprite, dynamicPath: path ?? node.sprite.dynamicPath, customSprite: customSprite ?? node.sprite.customSprite }
-      : node.sprite;
+      ? { ...drawn, dynamicPath: path ?? drawn.dynamicPath, customSprite: customSprite ?? drawn.customSprite }
+      : drawn;
+  const aimAt = node.follow?.aimAt;
+  const follow = aimFrom && aimAt ? { ...node.follow, aimAt: { ...aimAt, from: aimFrom } } : node.follow;
   return {
-    node: { ...node, transform: { ...rest, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew }, sprite },
+    node: {
+      ...node,
+      transform: { ...rest, rotate, translate: { x, y }, scale: { x: scaleX, y: scaleY }, skew },
+      sprite: posedSprite,
+      follow,
+    },
     hidden,
     zOffset,
     outlineZOffset,
     path,
     customSprite,
     mask,
+    sprite,
+    cuts,
   };
 };
 
@@ -184,8 +209,10 @@ export const bakePose = (body: Node, pose: Pose = {}): Node => {
       posed.outlineZOffset && baked.outline?.zIndex !== undefined
         ? { ...baked.outline, zIndex: baked.outline.zIndex + posed.outlineZOffset }
         : baked.outline;
+    const regions = posed.cuts ? { ...baked.regions, cuts: [...(baked.regions?.cuts ?? []), ...posed.cuts] } : baked.regions;
     return {
       ...baked,
+      regions,
       zIndex: posed.zOffset ? (node.zIndex ?? 0) + posed.zOffset : node.zIndex,
       paint,
       outline,
@@ -209,6 +236,15 @@ export const createRig = (root: Node): Rig => {
   };
   add(root, -1, "root");
   return { entries, indexById };
+};
+
+/** A number per driven sprite object, for the layout key: the same sprite gives the same key. */
+const spriteKeys = new WeakMap<Sprite, number>();
+let nextSpriteKey = 0;
+const spriteKey = (sprite: Sprite) => {
+  let key = spriteKeys.get(sprite);
+  if (key === undefined) spriteKeys.set(sprite, (key = nextSpriteKey++));
+  return key;
 };
 
 const hasConstraint = (node: Node) => Boolean(node.follow?.aimAt || node.follow?.pinTo);
@@ -240,7 +276,9 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
   const outlineZOffsets: number[] = new Array(count);
   const customSprites: (CustomSprite | undefined)[] = new Array(count);
   const masks: (Sprite | null | undefined)[] = new Array(count);
-  const zKeyParts: string[] = [];
+  const sprites: (Sprite | undefined)[] = new Array(count);
+  const cuts: (RegionCutRef[] | undefined)[] = new Array(count);
+  const layoutKeyParts: string[] = [];
   for (let i = 0; i < count; i += 1) {
     const { node, parent } = rig.entries[i];
     const posed = applyPose(node, pose);
@@ -250,8 +288,14 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     outlineZOffsets[i] = posed.outlineZOffset;
     customSprites[i] = posed.customSprite;
     masks[i] = posed.mask;
+    sprites[i] = posed.sprite;
+    cuts[i] = posed.cuts;
     if (posed.path !== undefined) dynamicPaths[i] = posed.path;
-    if (posed.zOffset || posed.outlineZOffset) zKeyParts.push(`${i}:${posed.zOffset}:${posed.outlineZOffset}`);
+    if (posed.zOffset || posed.outlineZOffset || posed.sprite || posed.cuts) {
+      const sprite = posed.sprite ? `:s${spriteKey(posed.sprite)}` : "";
+      const cut = posed.cuts ? `:c${posed.cuts.map(({ region, mode }) => `${region}/${mode}`).join("+")}` : "";
+      layoutKeyParts.push(`${i}:${posed.zOffset}:${posed.outlineZOffset}${sprite}${cut}`);
+    }
   }
 
   /** One entry's matrices, given what it hangs from. */
@@ -308,7 +352,8 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
       const parentMatrix = hangsFrom(i, matrices, jointBases);
       const targets = hasConstraint(node) ? targetsFor() : undefined;
       const solved = solveEntry(i, parentMatrix, targets);
-      const aimAt = node.follow?.aimAt;
+      // Posed: a driver may move the aim's `from`.
+      const aimAt = posedNodes[i].follow?.aimAt;
       if (aimAt?.arrive && targets) dynamicPaths[i] = resolveArrivePath(aimAt, solved.world, targets);
       matrices[i] = solved.world;
       jointBases[i] = solved.jointBase;
@@ -355,9 +400,11 @@ export const solvePose = (rig: Rig, pose: Pose = {}): PoseSolution => {
     dynamicPaths,
     customSprites,
     masks,
+    sprites,
+    cuts,
     hidden,
     zOffsets,
     outlineZOffsets,
-    zKey: zKeyParts.join(","),
+    layoutKey: layoutKeyParts.join(","),
   };
 };

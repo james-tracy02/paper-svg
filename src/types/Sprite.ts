@@ -53,6 +53,12 @@ export type Sprite = Transform & {
   opacity?: number;
   pattern?: Sprite;
   patternFills?: Record<number, Sprite>;
+  /**
+   * As a pattern tile: the distance between repeats, in the custom sprite's units. Smaller than the sprite's size,
+   * neighboring repeats overlap instead of leaving gaps where the drawing doesn't fill its bounds. Defaults to the
+   * custom sprite's size.
+   */
+  patternRepeat?: { width: number; height: number };
   dynamicPath?: string;
   href?: string;
   lineCap?: "butt" | "round" | "square";
