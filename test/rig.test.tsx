@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { NodeBuilder, Rig, SpriteBuilder, type RigProps } from "../src";
+import { NodeBuilder, Rig, SpriteBuilder, type CustomSprite, type RigProps } from "../src";
+import { getSpriteTransform } from "../src/render/transform";
 
 const render = (props: RigProps) =>
   renderToStaticMarkup(
@@ -64,6 +65,26 @@ describe("Rig", () => {
     expect(svg).toContain('clip-path="url(#demo_cut_mask)"');
     expect(svg).toContain('<mask id="demo_faded_mask"');
     expect(svg).toContain('mask="url(#demo_faded_mask)"');
+  });
+
+  it("places a hard custom sprite mask's shapes where the sprite draws them, custom sprite transform included", () => {
+    // A drawing authored away from the origin, which its own transform brings into the sprite's box.
+    const drawing: CustomSprite = {
+      id: "offcenter",
+      colors: 1,
+      strokeColors: 0,
+      elements: [{ d: "M 100 200 L 110 200 L 110 260 Z", colorKey: "color0" }],
+      translate: { x: -105, y: -230 },
+      scale: { x: 1, y: 1 },
+      rotate: 0,
+    };
+    const mask = new SpriteBuilder().setCustomSprite(drawing).setOffset(0, -20).build();
+    const svg = render({ body: part("root").addJoints(part("cut").setCut(mask).build()).build(), idPrefix: "demo" });
+
+    const clip = svg.match(/<clipPath id="demo_cut_mask"[^>]*><path [^>]*transform="([^"]*)"/);
+    expect(clip).not.toBeNull();
+    expect(clip![1]).toContain(getSpriteTransform(drawing));
+    expect(clip![1]).toContain(getSpriteTransform(mask));
   });
 
   it("cuts a member adding only where it's cut by its cutting region's <clipPath>, inside the other region's mask", () => {

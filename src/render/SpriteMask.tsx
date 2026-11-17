@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import type { Sprite } from "../types/Sprite";
 import { maskProps } from "./maskProps";
 import { getSpriteMaskRegion } from "./spriteBounds";
+import { getSpriteTransform } from "./transform";
 
 type MaskProps = {
   id: string;
@@ -29,9 +30,12 @@ export const spriteMaskAttributes = (sprite: Sprite, id: string): { mask?: strin
 const renderClipShapes = (sprite: Sprite) => {
   const transform = getTransformForMode(sprite, "mask") || undefined;
   if (sprite.customSprite) {
+    // The custom sprite's own transform (what places its drawing in the sprite's box) composes inside the
+    // sprite's, as CustomSpriteShape draws it; without it the shapes sit where the drawing was authored.
+    const root = getSpriteTransform(sprite.customSprite);
     return sprite.customSprite.elements.map((el, i) =>
       el.d && !el.noFill ? (
-        <path key={i} d={el.d} transform={[transform, el.transform].filter(Boolean).join(" ") || undefined} />
+        <path key={i} d={el.d} transform={[transform, root, el.transform].filter(Boolean).join(" ") || undefined} />
       ) : null,
     );
   }
