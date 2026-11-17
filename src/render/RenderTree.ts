@@ -85,6 +85,8 @@ type RenderOptions = {
   /** Region joins and cuts passed down by ancestors (`joinsForChildren`, `cutsForChildren`). */
   parentJoins?: RegionJoin[];
   parentCuts?: RegionCutRef[];
+  /** The node's own cuts in this pose: its built ones and what its drivers add. */
+  ownCuts?: RegionCutRef[];
 };
 
 /** The solved pose, and the rig entry the walk is at: the walk visits nodes in rig entry order. */
@@ -118,14 +120,16 @@ const createRenderNode = (
 ): RenderNode => {
   const { regions, cuts, traceOutline } = resolveRegions(body, {
     joins: [...(body.regions?.joins ?? []), ...(opts.parentJoins ?? [])],
-    cuts: [...(body.regions?.cuts ?? []), ...(opts.parentCuts ?? [])],
+    cuts: [...(opts.ownCuts ?? []), ...(opts.parentCuts ?? [])],
   });
   const paint = body.paint ?? {};
+  // A driver may draw the node with another sprite in this pose (see DriverOutput.sprite).
+  const own = solution.sprites[index] ?? body.sprite;
 
   const node: RenderNode = {
     id: body.id,
     zIndex,
-    sprite: solution.customSprites[index] ? { ...body.sprite, customSprite: solution.customSprites[index] } : { ...body.sprite },
+    sprite: solution.customSprites[index] ? { ...own, customSprite: solution.customSprites[index] } : { ...own },
     matrix: solution.matrices[index],
     parentMatrix: solution.parentMatrices[index],
     translateScale: solution.translateScales[index],
@@ -136,9 +140,9 @@ const createRenderNode = (
     mask: solution.masks[index] === undefined ? paint.mask : (solution.masks[index] ?? undefined),
     regions,
     cuts,
-    pattern: body.sprite.pattern,
-    patternFills: body.sprite.patternFills,
-    patternSpace: body.sprite.pattern ? solution.patternSpaces[index] : undefined,
+    pattern: own.pattern,
+    patternFills: own.patternFills,
+    patternSpace: own.pattern ? solution.patternSpaces[index] : undefined,
     renderGroup: paint.renderGroup,
     blendMode: paint.blendMode,
     traceOutline,
@@ -160,6 +164,8 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
   // `stopInheritedRegions`/`stopInheritedCuts` break the inheritance chain at this node: what was passed down is
   // dropped here, for this node and, since it isn't passed on, its descendants.
   const regionOptions = body.regions ?? {};
+  const drivenCuts = ctx.solution.cuts[index];
+  const ownCuts = drivenCuts ? [...(regionOptions.cuts ?? []), ...drivenCuts] : regionOptions.cuts;
   const parentJoins = regionOptions.stopInheritedRegions ? undefined : opts.parentJoins;
   const parentCuts = regionOptions.stopInheritedCuts ? undefined : opts.parentCuts;
   // `regionsForChildren`/`cutsForChildren` add this node's own joins and cuts to what its descendants receive.
@@ -168,7 +174,7 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
     ...(parentJoins ?? []),
     ...(regionOptions.regionsForChildren ? (regionOptions.joins ?? []).map(({ outset: _, ...join }) => join) : []),
   ];
-  const childCuts = [...(parentCuts ?? []), ...(regionOptions.cutsForChildren ? (regionOptions.cuts ?? []) : [])];
+  const childCuts = [...(parentCuts ?? []), ...(regionOptions.cutsForChildren ? (ownCuts ?? []) : [])];
   const nextParentJoins = childJoins.length ? childJoins : undefined;
   const nextParentCuts = childCuts.length ? childCuts : undefined;
 
@@ -181,6 +187,7 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
       ...opts,
       parentJoins,
       parentCuts,
+      ownCuts,
     },
     zIndex,
   );
@@ -210,7 +217,12 @@ const buildRenderTreeNode = (body: Node, renderOpts: Partial<RenderOptions>, ctx
   const outline =
     body.outline?.zIndex === undefined
       ? undefined
-      : createOutlineNode(currentNode, body.outline.zIndex + ctx.solution.outlineZOffsets[index]);
+      : createOutlineNode(
+          currentNode,
+          (body.outline.zIndexMode === "relative" ? zIndex : 0) +
+            body.outline.zIndex +
+            ctx.solution.outlineZOffsets[index],
+        );
 
   return {
     node: currentNode,

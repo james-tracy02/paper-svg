@@ -4,7 +4,7 @@
  * No React here, so the rules can be tested directly; RigLayers turns the plan into SVG.
  */
 import type { CSSProperties } from "react";
-import type { RenderGroupOptions } from "../types/RenderGroup";
+import { renderGroupPath, type RenderGroup, type RenderGroupOptions } from "../types/RenderGroup";
 import type { RenderNode } from "./RenderTree";
 import { getFillWrapTargets, listFillWrappers, type FillWrapper } from "./fillWrappers";
 import { createOutlineNode } from "./outline";
@@ -179,9 +179,11 @@ const planDefs = ({ nodes, visibleNodes, getRenderGroupOptions, scopeId }: PlanL
     return use;
   };
   for (const node of visibleNodes) {
-    const options = node.renderGroup && getRenderGroupOptions(node.renderGroup.id);
-    if (options?.mask && regions.has(options.mask)) useOf(options.mask).mask = true;
-    if (options?.clip && regions.has(options.clip)) useOf(options.clip).clip = true;
+    for (const group of renderGroupPath(node.renderGroup)) {
+      const options = getRenderGroupOptions(group.id);
+      if (options?.mask && regions.has(options.mask)) useOf(options.mask).mask = true;
+      if (options?.clip && regions.has(options.clip)) useOf(options.clip).clip = true;
+    }
     if (node.noSprite) continue;
     for (const { region, mode } of fillCutRefs(node)) {
       // A node tracing the outline covers it with its fill first, so a mask takes the full shape, outlines and all.
@@ -360,50 +362,60 @@ const planPaint = (
     return group(list);
   };
 
-  // A render group paints where its last member would.
-  const lastIndexByGroupId = new Map<string, number>();
-  const membersByGroupId = new Map<string, RenderNode[]>();
-  nodes.forEach((node, index) => {
-    if (!node.renderGroup) return;
-    lastIndexByGroupId.set(node.renderGroup.id, index);
-    pushTo(membersByGroupId, node.renderGroup.id, node);
-  });
+  const pathOf = new Map(nodes.map((node) => [node, renderGroupPath(node.renderGroup)] as const));
 
-  const items: PaintItem[] = [];
-  let pending: RenderNode[] = [];
-  const flush = () => {
-    items.push(...planSequence(pending, []));
-    pending = [];
-  };
-  nodes.forEach((node, index) => {
-    if (!node.renderGroup) {
-      pending.push(node);
-      return;
-    }
-    const id = node.renderGroup.id;
-    if (lastIndexByGroupId.get(id) !== index) return;
-    flush();
-    const options = getRenderGroupOptions(id);
-    // A render group's `mask` cuts it by the region's inset mask, its `clip` by its clip-path.
-    const groupWrappers = [
-      options?.mask ? groupWrapper(forms.get(options.mask), "mask") : undefined,
-      options?.clip ? groupWrapper(forms.get(options.clip), "clip") : undefined,
-    ].filter((wrapper): wrapper is FillWrapper => wrapper !== undefined);
-    items.push({
-      kind: "renderGroup",
-      key: `render_group_${id}`,
-      group: {
-        id,
-        opacity: options?.opacity === undefined ? undefined : Math.max(0, Math.min(1, options.opacity)),
-        wrappers: groupWrappers,
-        blendMode: options?.blendMode ?? "normal",
-      },
-      items: planSequence(membersByGroupId.get(id)!, groupWrappers),
+  // Plans `sequence` at nesting `depth`: a render group at that depth paints as one block where its last member
+  // would; its members are planned the same way one level down. `outerWrappers` are the enclosing groups' cuts,
+  // which the members don't apply again.
+  const planGroups = (sequence: RenderNode[], depth: number, outerWrappers: FillWrapper[]): PaintItem[] => {
+    const groupAt = (node: RenderNode) => pathOf.get(node)![depth] as RenderGroup | undefined;
+    const lastIndexByGroupId = new Map<string, number>();
+    const membersByGroupId = new Map<string, RenderNode[]>();
+    sequence.forEach((node, index) => {
+      const group = groupAt(node);
+      if (!group) return;
+      lastIndexByGroupId.set(group.id, index);
+      pushTo(membersByGroupId, group.id, node);
     });
-  });
-  flush();
 
-  return { items, outerOutlines };
+    const items: PaintItem[] = [];
+    let pending: RenderNode[] = [];
+    const flush = () => {
+      items.push(...planSequence(pending, outerWrappers));
+      pending = [];
+    };
+    sequence.forEach((node, index) => {
+      const group = groupAt(node);
+      if (!group) {
+        pending.push(node);
+        return;
+      }
+      const id = group.id;
+      if (lastIndexByGroupId.get(id) !== index) return;
+      flush();
+      const options = getRenderGroupOptions(id);
+      // A render group's `mask` cuts it by the region's inset mask, its `clip` by its clip-path.
+      const groupWrappers = [
+        options?.mask ? groupWrapper(forms.get(options.mask), "mask") : undefined,
+        options?.clip ? groupWrapper(forms.get(options.clip), "clip") : undefined,
+      ].filter((wrapper): wrapper is FillWrapper => wrapper !== undefined && !outerWrappers.includes(wrapper));
+      items.push({
+        kind: "renderGroup",
+        key: `render_group_${id}`,
+        group: {
+          id,
+          opacity: options?.opacity === undefined ? undefined : Math.max(0, Math.min(1, options.opacity)),
+          wrappers: groupWrappers,
+          blendMode: options?.blendMode ?? "normal",
+        },
+        items: planGroups(membersByGroupId.get(id)!, depth + 1, [...outerWrappers, ...groupWrappers]),
+      });
+    });
+    flush();
+    return items;
+  };
+
+  return { items: planGroups(nodes, 0, []), outerOutlines };
 };
 
 /** Plans the defs and paint order for `visibleNodes` (see LayerPlan). */

@@ -54,10 +54,13 @@ const SpriteDefs: React.FC<SpriteDefsProps> = ({ body, nodes }) => {
     return [...extra].join("\u0000");
   }, [nodes, bodyPaths]);
 
+  // By the paths themselves, so a rebuilt body with the same paths skips the defs.
+  const bodyKey = useMemo(() => [...bodyPaths].join("\u0000"), [bodyPaths]);
+
   return useMemo(() => {
-    const defs = [...pathDefs(bodyPaths), ...(extraKey ? pathDefs(extraKey.split("\u0000")) : [])];
-    return defs.length ? <defs>{defs}</defs> : null;
-  }, [bodyPaths, extraKey]);
+    const paths = [...(bodyKey ? bodyKey.split("\u0000") : []), ...(extraKey ? extraKey.split("\u0000") : [])];
+    return paths.length ? <defs>{pathDefs(paths)}</defs> : null;
+  }, [bodyKey, extraKey]);
 };
 
 export default SpriteDefs;

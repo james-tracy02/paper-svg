@@ -81,6 +81,8 @@ export type NodePaint = {
 export type NodeOutline = {
   /** Draws the outline as its own layer at this z-index, instead of with the fill. */
   zIndex?: number;
+  /** "relative" adds `zIndex` to the node's own resolved z-index. Default "absolute". */
+  zIndexMode?: "relative" | "absolute";
   /**
    * Draws the node over the outlines of regions, in its own outline colour, where it covers them (`traceOutline`):
    * true for the regions cutting the node, or the names of other regions (`traceOutlineOf`). The node's fill is

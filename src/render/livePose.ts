@@ -89,7 +89,7 @@ export const createLivePoser = (): LivePoser => {
       const { layout } = shown;
       const { rig } = layout;
       const solution = solvePose(rig, pose);
-      if (solution.zKey !== layout.zKey) return false;
+      if (solution.layoutKey !== layout.layoutKey) return false;
       const moved = new Map<string, RenderNode>();
       for (const node of getWritableNodes(layout)) {
         const at = placementOf(node, rig.indexById.get(node.outlineOf ?? node.id)!, rig, solution);

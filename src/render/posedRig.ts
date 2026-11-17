@@ -1,7 +1,8 @@
 /**
  * Rendering a pose without rebuilding: the parts of rendering that depend only on a tree's structure
  * (its render nodes, which of them are drawn, the layer plan built from those) are made once per tree,
- * at rest, and again only when drivers change the draw order (`PoseSolution.zKey`). A pose then patches
+ * at rest, and again only when drivers change what the layers are planned from: draw order, a driven
+ * sprite or driven cuts (`PoseSolution.layoutKey`). A pose then patches
  * each node's placement and shape, the only other fields a pose can change, and keeps a node's
  * identity when those didn't change, so memoized groups skip it.
  *
@@ -19,8 +20,8 @@ import { resolveVisibleNodes } from "./layerPlan";
 
 export type RigLayout = {
   readonly rig: Rig;
-  /** The draw order this layout was made for (see `PoseSolution.zKey`). */
-  readonly zKey: string;
+  /** The draw order, driven sprites and driven cuts this layout was made for (see `PoseSolution.layoutKey`). */
+  readonly layoutKey: string;
   /** Render nodes at rest, sorted by z-index. */
   readonly nodes: RenderNode[];
   /** What RigLayers paints at rest (see `resolveVisibleNodes`). */
@@ -40,34 +41,64 @@ export type PosedRig = {
 
 const byZIndex = (a: RenderNode, b: RenderNode) => a.zIndex - b.zIndex;
 
+const sameFields = (a: object, b: object) => {
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  const keys = Object.keys(x);
+  if (keys.length !== Object.keys(y).length) return false;
+  for (const key of keys) if (x[key] !== y[key]) return false;
+  return true;
+};
+
+const sameCuts = (a: RenderNode["cuts"], b: RenderNode["cuts"]) =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    a.length === b.length &&
+    a.every((cut, i) => cut.region === b[i].region && cut.mode === b[i].mode && cut.fill === b[i].fill && cut.outline === b[i].outline));
+
 /**
- * `nodes`, with each one `previous` (a layout of the same rig) has at the same z-index reused. For one
- * rig, a node at rest depends only on its entry and its z-index, so the reused node is identical. Its
- * links (`parent`, `jointParent`, `linkedOutline`) may point into the previous layout; they are read
- * only for what doesn't change with draw order (ids, `articulated`, stroke width).
+ * `nodes`, with each one `previous` (a layout of the same rig) has the same reused. For one rig, a node at
+ * rest depends only on its entry, its z-index, the sprite a driver draws it with and the cuts drivers add
+ * (its own or passed down), so a node alike in those is identical. Sprites are compared field by field:
+ * each layout copies them. Links (`parent`, `jointParent`, `linkedOutline`) may point into the
+ * previous layout; they are read only for what a layout doesn't change (ids, `articulated`, stroke width).
  */
 const reuseUnmoved = (nodes: RenderNode[], previous: readonly RenderNode[] | undefined) => {
   if (!previous) return nodes;
   const before = new Map(previous.map((node) => [node.id, node]));
   return nodes.map((node) => {
     const last = before.get(node.id);
-    return last && last.zIndex === node.zIndex ? last : node;
+    return last &&
+      last.zIndex === node.zIndex &&
+      sameCuts(last.cuts, node.cuts) &&
+      last.traceOutline === node.traceOutline &&
+      sameFields(last.sprite, node.sprite)
+      ? last
+      : node;
   });
 };
 
 /**
- * Lays a rig out at rest, in the draw order of `drawOrder` (a solved pose; default: rest). Nodes are
- * placed at rest whatever the pose, so a new draw order changes only the nodes it reorders: pass the
- * layout it replaces as `previous`, and every other node keeps its identity.
+ * Lays a rig out at rest, in the draw order of `drawOrder` (a solved pose; default: rest) and with its
+ * driven sprites and cuts. Nodes are placed at rest whatever the pose, so a new layout changes only the
+ * nodes those change: pass the layout it replaces as `previous`, and every other node keeps its identity.
  */
 export const createRigLayout = (rig: Rig, drawOrder?: PoseSolution, previous?: RigLayout): RigLayout => {
   const rest = solvePose(rig);
   const solution = drawOrder
-    ? { ...rest, zOffsets: drawOrder.zOffsets, outlineZOffsets: drawOrder.outlineZOffsets, zKey: drawOrder.zKey }
+    ? {
+        ...rest,
+        zOffsets: drawOrder.zOffsets,
+        outlineZOffsets: drawOrder.outlineZOffsets,
+        sprites: drawOrder.sprites,
+        cuts: drawOrder.cuts,
+        layoutKey: drawOrder.layoutKey,
+      }
     : rest;
   const same = previous?.rig === rig ? previous : undefined;
   const nodes = reuseUnmoved(flattenRenderTree(buildRenderTreeFromPose(rig, solution)).sort(byZIndex), same?.nodes);
-  return { rig, zKey: solution.zKey, nodes, visibleNodes: reuseUnmoved(resolveVisibleNodes(nodes), same?.visibleNodes) };
+  return { rig, layoutKey: solution.layoutKey, nodes, visibleNodes: reuseUnmoved(resolveVisibleNodes(nodes), same?.visibleNodes) };
 };
 
 const sameVector = (a: Vector2 | undefined, b: Vector2 | undefined) => a === b || (!!a && !!b && a.x === b.x && a.y === b.y);
@@ -96,8 +127,9 @@ const maskOf = (index: number, rig: Rig, solution: PoseSolution) => {
 
 /** Where `solution` places `node`, and its shape, as a fresh walk of the posed tree would make them. */
 export const placementOf = (node: RenderNode, index: number, rig: Rig, solution: PoseSolution): Placement => {
-  // A pose sets these only where it computes one; otherwise the node's own sprite (as built) has them.
-  const own = rig.entries[index].node.sprite;
+  // A pose sets these only where it computes one; otherwise the sprite the node is drawn with has them:
+  // its own as built, or a driver's (the layout was made with the same, see layoutKey).
+  const own = solution.sprites[index] ?? rig.entries[index].node.sprite;
   return {
     matrix: solution.matrices[index],
     parentMatrix: solution.parentMatrices[index],
